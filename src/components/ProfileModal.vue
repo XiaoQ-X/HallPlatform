@@ -1,0 +1,58 @@
+<template>
+  <div class="modal-mask" @click.self="$emit('close')">
+    <div class="modal p-6 w-[26rem]">
+      <h3 class="font-bold text-lg mb-4">个人资料</h3>
+
+      <!-- 头像 -->
+      <div class="flex items-center gap-4 mb-5">
+        <div class="w-16 h-16 rounded-full bg-gradient-to-br from-brand-100 to-brand-300 flex items-center justify-center text-3xl shadow-soft">{{ form.avatar }}</div>
+        <div class="flex-1">
+          <div class="text-xs text-ink-400 mb-2">选择头像</div>
+          <div class="flex flex-wrap gap-1.5">
+            <button v-for="a in avatars" :key="a" @click="form.avatar=a"
+              :class="['w-9 h-9 rounded-xl text-lg flex items-center justify-center transition',
+                form.avatar===a?'bg-brand-100 ring-2 ring-brand-400':'bg-ink-50 hover:bg-ink-100']">{{ a }}</button>
+          </div>
+        </div>
+      </div>
+
+      <label class="text-xs text-ink-400">姓名</label>
+      <input v-model="form.name" class="input mb-4"/>
+
+      <div class="rounded-2xl bg-ink-50 p-4">
+        <div class="text-xs font-medium text-ink-500 mb-3">修改密码（不修改可留空）</div>
+        <input v-model="oldPassword" type="password" class="input mb-2" placeholder="当前密码"/>
+        <input v-model="newPassword" type="password" class="input" placeholder="新密码（至少 6 位）"/>
+      </div>
+
+      <div v-if="error" class="text-xs text-rose-500 mt-3">{{ error }}</div>
+      <div class="flex gap-3 mt-5">
+        <button class="btn-ghost flex-1" @click="$emit('close')">取消</button>
+        <button class="btn-primary flex-1" @click="save">保存</button>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { reactive, ref, watch } from 'vue';
+import { api } from '../api';
+import { useAuth } from '../stores/auth';
+const props = defineProps({ user: Object });
+const emit = defineEmits(['close','saved']);
+const auth = useAuth();
+const avatars = ['🧑‍🎓','👨‍🎓','👩‍🎓','🧑‍🔬','👨‍🔬','👩‍🔬','🧑‍🏫','👨‍🏫','👩‍🏫','🦊','🐼','🐱','🌟','🚀','⚛️','🔬'];
+const form = reactive({ name:'', avatar:'' });
+const oldPassword = ref(''), newPassword = ref(''), error = ref('');
+watch(()=>props.user, u => { if(u){ form.name=u.name||''; form.avatar=u.avatar||'🧑‍🎓'; } }, { immediate:true });
+async function save(){
+  error.value='';
+  try {
+    const body = { name:form.name, avatar:form.avatar };
+    if(newPassword.value){ body.oldPassword=oldPassword.value; body.newPassword=newPassword.value; }
+    const r = await api('/auth/me', { method:'PUT', body });
+    auth.user = r.user;
+    emit('saved', r.user); emit('close');
+  } catch(e){ error.value = e.message; }
+}
+</script>

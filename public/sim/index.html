@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>霍尔效应仿真实验</title>
+<style>html,body{margin:0;width:100%;height:100%;background:#e6eceb;overflow:hidden;font-family:system-ui,sans-serif}canvas{width:100%;height:100%;display:block}#loading{position:absolute;inset:0;display:grid;place-content:center;gap:16px;text-align:center;color:#163e38}progress{width:260px;accent-color:#13756b}#failure{white-space:pre-wrap;max-width:90vw;color:#9b2424}#fullscreen{position:absolute;right:10px;bottom:10px;width:34px;height:34px;border:1px solid #aebcba;background:white;border-radius:4px;font-size:22px;cursor:pointer}</style></head>
+<body><style>@media(max-width:700px) and (orientation:portrait){canvas{height:62.5vw;position:absolute;top:50%;transform:translateY(-50%)}}</style><canvas id="unity-canvas" tabindex="0" aria-label="霍尔效应三维实验台"></canvas><div id="loading"><strong>霍尔效应仿真实验</strong><progress id="progress" max="1" value="0"></progress><span id="failure">正在加载实验</span></div><button id="fullscreen" title="全屏" aria-label="全屏">⛶</button>
+<script src="hall-host.js"></script>
+<script>
+const canvas=document.getElementById('unity-canvas');
+const loader=document.createElement('script');loader.src='Build/WebGL.loader.js';
+loader.onerror=()=>document.getElementById('failure').textContent='加载失败，请检查部署文件与网络。';
+loader.onload=()=>createUnityInstance(canvas,{
+ dataUrl:'Build/WebGL.data.unityweb',frameworkUrl:'Build/WebGL.framework.js.unityweb',codeUrl:'Build/WebGL.wasm.unityweb',
+ streamingAssetsUrl:'StreamingAssets',companyName:'Hall Effect Lab',productName:'Hall Experiment',productVersion:'2.3.0-web.1',
+ matchWebGLToCanvasSize:true,devicePixelRatio:Math.min(window.devicePixelRatio||1,2)
+},p=>document.getElementById('progress').value=p).then(instance=>{
+ window.unityInstance=instance;window.HallHost.attach(instance);document.getElementById('loading').style.display='none';
+ document.getElementById('fullscreen').onclick=()=>instance.SetFullscreen(1);
+}).catch(error=>document.getElementById('failure').textContent=String(error));
+document.body.appendChild(loader);
+</script></body></html>
