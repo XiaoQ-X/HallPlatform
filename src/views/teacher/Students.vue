@@ -46,7 +46,7 @@
         <label class="text-xs text-ink-400 mt-3 block">头像</label>
         <input v-model="form.avatar" class="input mb-3" placeholder="emoji"/>
         <label v-if="!form.id" class="text-xs text-ink-400 block">初始密码</label>
-        <input v-if="!form.id" v-model="form.password" type="password" autocomplete="new-password" class="input mb-3" placeholder="至少10位初始密码"/>
+        <input v-if="!form.id" v-model="form.password" type="password" minlength="6" autocomplete="new-password" class="input mb-3" placeholder="至少6位初始密码"/>
         <div class="flex gap-3 mt-2"><button class="btn-ghost flex-1" @click="form=null">取消</button>
           <button class="btn-primary flex-1" @click="save">保存</button></div>
       </div>

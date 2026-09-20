@@ -22,7 +22,7 @@
       <div class="rounded-2xl bg-ink-50 p-4">
         <div class="text-xs font-medium text-ink-500 mb-3">修改密码（不修改可留空）</div>
         <input v-model="oldPassword" type="password" class="input mb-2" placeholder="当前密码"/>
-        <input v-model="newPassword" type="password" class="input" placeholder="新密码（至少 6 位）"/>
+        <input v-model="newPassword" type="password" minlength="6" class="input" placeholder="新密码（至少 6 位）"/>
       </div>
 
       <div v-if="error" class="text-xs text-rose-500 mt-3">{{ error }}</div>

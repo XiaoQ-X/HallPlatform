@@ -18,7 +18,7 @@ module.exports=(jwt,SECRET,auth)=>{
   r.put('/me',auth,(req,res)=>{
     const u=db.prepare('SELECT * FROM users WHERE id=?').get(req.user.id),b=req.body;
     const name=b.name==null?u.name:text(b.name,'姓名',80),avatar=b.avatar==null?u.avatar:text(b.avatar,'头像',30);let hash=u.password;
-    if(b.newPassword){text(b.newPassword,'密码',72);if(b.newPassword.length<10)fail('密码至少10位');if(typeof b.oldPassword!=='string'||!bcrypt.compareSync(b.oldPassword,u.password))fail('原密码不正确');hash=bcrypt.hashSync(b.newPassword,12);}
+    if(b.newPassword){text(b.newPassword,'密码',72);if(b.newPassword.length<6)fail('密码至少6位');if(typeof b.oldPassword!=='string'||!bcrypt.compareSync(b.oldPassword,u.password))fail('原密码不正确');hash=bcrypt.hashSync(b.newPassword,12);}
     transaction(()=>{db.prepare('UPDATE users SET name=?,avatar=?,password=?,token_version=token_version+? WHERE id=?').run(name,avatar,hash,b.newPassword?1:0,u.id);audit(u.id,'profile',u.id,null,{name,passwordChanged:!!b.newPassword});});
     const fresh=db.prepare('SELECT * FROM users WHERE id=?').get(u.id);
     res.json({user:db.prepare('SELECT id,username,name,role,class_id,student_no,avatar FROM users WHERE id=?').get(u.id),token:token(fresh)});
