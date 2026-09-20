@@ -51,7 +51,7 @@ try { pre = JSON.parse(sessionStorage.getItem('appeal_ref')); sessionStorage.rem
 async function submit(){
   if(!content.value)return alert('请填写申诉内容');
   await api('/peer/appeals',{method:'POST',body:{ref_type:pre?.ref_type||'general',ref_id:pre?.ref_id||0,content:content.value}});
-  content.value=''; load();
+  content.value=''; pre=null; await load();
 }
 async function reply(a){
   if(!replies.value[a.id])return;

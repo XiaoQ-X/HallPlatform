@@ -1,13 +1,17 @@
 {
   "name": "hall-platform",
-  "version": "1.0.0",
+  "version": "1.4.0",
   "private": true,
+  "engines": { "node": ">=22.13.0" },
+  "packageManager": "pnpm@11.19.0",
   "description": "霍尔效应仿真教学平台",
   "main": "server/index.js",
   "scripts": {
     "dev": "node --experimental-sqlite server/index.js",
     "build": "vite build",
-    "start": "node --experimental-sqlite server/index.js"
+    "start": "node --experimental-sqlite server/index.js",
+    "test": "node --test tests/*.test.cjs",
+    "backup": "node scripts/backup.cjs"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -15,12 +19,15 @@
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
     "katex": "^0.18.7",
-    "multer": "^1.4.5-lts.1"
+    "multer": "^2.0.2",
+    "dompurify": "^3.3.0",
+    "ml-matrix": "^6.12.1",
+    "jstat": "^1.9.6"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.2.1",
     "autoprefixer": "^10.4.20",
-    "echarts": "^5.6.0",
+    "echarts": "^6.1.0",
     "pinia": "^2.3.1",
     "postcss": "^8.5.1",
     "tailwindcss": "^3.4.17",

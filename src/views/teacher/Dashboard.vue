@@ -1,5 +1,7 @@
 <template>
   <div class="space-y-5 max-w-7xl">
+    <label class="block max-w-xs">班级<select v-model="classId" @change="load" class="input"><option value="">全部任课班级</option><option v-for="c in classes" :value="c.id">{{c.name}}</option></select></label>
+    <div class="flex flex-wrap gap-5 text-sm"><span>待核验实验：{{d.unverified||0}}</span><span>未解决清洗记录：{{d.unresolved||0}}</span></div>
     <!-- KPI -->
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
       <div v-for="k in kpis" :key="k.label" class="card-hover p-5 relative overflow-hidden">
@@ -34,8 +36,8 @@
           </div>
         </div>
         <div class="mt-4 grid grid-cols-2 gap-3 text-sm">
-          <div class="p-4 rounded-2xl bg-ink-50">课题提交率<b class="block text-lg text-ink-900">{{ d.subCount?Math.round(d.gradedCount*100/d.subCount):0 }}% 已评</b></div>
-          <div class="p-4 rounded-2xl bg-ink-50">实验完成率<b class="block text-lg text-ink-900">{{ d.completionRate }}%</b></div>
+          <div class="p-4 rounded-2xl bg-ink-50">已提交课题评阅率<b class="block text-lg text-ink-900">{{ d.subCount?Math.round(d.gradedCount*100/d.subCount):0 }}% 已评</b></div>
+          <div class="p-4 rounded-2xl bg-ink-50">学生完成实验比例<b class="block text-lg text-ink-900">{{ d.completionRate }}%</b></div>
         </div>
       </div>
     </div>
@@ -47,7 +49,7 @@
         <thead><tr class="text-xs text-ink-400">
           <th class="text-left py-2 font-medium">姓名</th><th class="font-medium">班级</th>
           <th class="font-medium">实验会话</th><th class="font-medium">完成</th>
-          <th class="font-medium">异常数</th><th class="font-medium">课题提交</th><th class="font-medium">自测最佳</th></tr></thead>
+          <th class="font-medium">异常数</th><th class="font-medium">课题提交</th><th class="font-medium">自测综合</th></tr></thead>
         <tbody>
           <tr v-for="s in students" :key="s.id" class="border-t border-ink-50 text-center">
             <td class="text-left py-3 flex items-center gap-2 pl-2"><span>{{ s.avatar }}</span>{{ s.name }}</td>
@@ -68,6 +70,8 @@ import Chart from '../../components/Chart.vue';
 import { api } from '../../api';
 const d = ref({ resourceCount:{}, abnormalDist:[], dailySessions:[] });
 const students = ref([]);
+const classes=ref([]),classId=ref('');
+async function load(){d.value=await api('/teacher/dashboard?class_id='+classId.value);students.value=await api('/teacher/students?class_id='+classId.value);}
 const kpis = computed(()=>[
   { label:'学生人数', value:d.value.studentCount, icon:'users', bg:'#e6faf5', color:'#078775' },
   { label:'实验会话', value:d.value.sessionCount, icon:'flask', bg:'#eaf2ff', color:'#2563eb' },
@@ -110,6 +114,5 @@ const gaugeOpt=computed(()=>({
       data:[{value:d.value.projectAvg,name:'课题均分'}]}
 ]}));
 
-onMounted(async()=>{ d.value=await api('/teacher/dashboard');
-  students.value=await api('/teacher/students'); });
+onMounted(async()=>{classes.value=await api('/auth/classes');await load();});
 </script>

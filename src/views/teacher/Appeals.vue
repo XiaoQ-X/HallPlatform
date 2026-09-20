@@ -15,6 +15,8 @@
       <div v-if="a.reply" class="mt-3 p-4 rounded-2xl bg-brand-50 text-sm text-brand-900 leading-7">
         <b>复核结论：</b>{{ a.reply }}<div class="text-[11px] text-brand-600 mt-1">{{ a.replied_at }}</div></div>
       <template v-else>
+        <details class="mt-3"><summary>原始证据快照</summary><pre class="text-xs whitespace-pre-wrap break-words">{{JSON.stringify(a.snapshot,null,2)}}</pre></details>
+        <select v-model="decisions[a.id]" class="input mt-3"><option value="uphold">维持原评价 / 回复</option><option v-if="a.ref_type==='review'" value="void">撤销该评价并重新计算草稿成绩</option></select>
         <textarea v-model="drafts[a.id]" class="input min-h-20 mt-3" placeholder="填写复核结论与处理结果…"></textarea>
         <button class="btn-primary w-full mt-3" @click="reply(a)"><Icon name="check":size="16"/> 提交复核结论</button>
       </template>
@@ -29,10 +31,11 @@ import { ref, onMounted } from 'vue';
 import Icon from '../../components/Icon.vue';
 import { api } from '../../api';
 const rows = ref([]), drafts = ref({});
+const decisions=ref({});
 async function reply(a){
   const text=(drafts.value[a.id]||'').trim();
   if(!text)return alert('请填写复核结论');
-  await api('/peer/appeals/'+a.id+'/reply',{method:'POST',body:{reply:text}});
+  await api('/peer/appeals/'+a.id+'/reply',{method:'POST',body:{reply:text,decision:decisions.value[a.id]||'uphold'}});
   load();
 }
 async function load(){ rows.value = await api('/peer/appeals'); }

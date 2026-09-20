@@ -2,7 +2,7 @@ const { DatabaseSync } = require('node:sqlite');
 const path = require('path');
 const fs = require('fs');
 
-const dataDir = path.join(__dirname, '..', 'data');
+const dataDir = process.env.HALL_DATA_DIR || path.join(__dirname, '..', 'data');
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 const db = new DatabaseSync(path.join(dataDir, 'hall.db'));
 db.exec('PRAGMA journal_mode = WAL');
@@ -159,3 +159,4 @@ _Statement.prototype.run = function (...args) {
 };
 
 module.exports = db;
+require('./migrate')(db, dataDir);

@@ -3,6 +3,7 @@
     <div class="card p-4 flex flex-wrap items-center gap-3">
       <div class="text-sm text-ink-500">权重：仿真30% · 自测25% · 课题30% · 互评15%</div>
       <button class="btn-soft ml-auto" @click="exportCsv"><Icon name="download":size="16"/> 导出成绩CSV</button>
+      <button class="btn-primary" @click="publish">发布成绩快照</button>
     </div>
 
     <div class="card p-6 overflow-x-auto">
@@ -15,7 +16,7 @@
         <tbody>
           <tr v-for="g in grades" :key="g.id" class="border-t border-ink-50 text-center hover:bg-ink-50/60">
             <td class="text-left py-3 text-ink-400">{{ g.student_no }}</td>
-            <td class="text-left font-medium text-ink-800">{{ g.name }}</td>
+            <td class="text-left font-medium text-ink-800">{{ g.name }}<details v-if="g.pending.length" class="text-xs text-amber-700"><summary>待完成 {{g.pending.length}} 项</summary><p v-for="p in g.pending">{{p}}</p></details></td>
             <td v-for="k in ['sim','quiz','project','peer']" :key="k">
               <span :title="g.comp[k].overridden?'已手动调整':''"
                 :class="g.comp[k].overridden?'text-amber-600 font-semibold border-b border-dotted border-amber-400':''">{{ cell(g.comp[k].score) }}</span></td>
@@ -38,6 +39,7 @@
           <option value="project">课题包</option><option value="peer">同伴互评</option></select>
         <label class="text-xs text-ink-400">调整为（0-100）</label>
         <input type="number" min="0" max="100" v-model.number="adjScore" class="input mb-4"/>
+        <label>调整依据<textarea v-model="reason" class="input mb-3"/></label>
         <div class="flex gap-3">
           <button class="btn-ghost flex-1" @click="clearAdj">清除调整</button>
           <button class="btn-primary flex-1" @click="saveAdj">应用</button></div>
@@ -59,15 +61,17 @@ import Icon from '../../components/Icon.vue';
 import { api } from '../../api';
 const grades=ref([]);
 const adj=ref(null), adjComp=ref('sim'), adjScore=ref(null);
+const reason=ref('');
+async function publish(){const reason=prompt('本次发布说明（待评成果须先评阅，缺交项目按当前政策计分）');if(reason){const r=await api('/teacher/grades/publish',{method:'POST',body:{reason}});alert('已发布 '+r.count+' 名学生的成绩快照');}}
 function openAdj(g){ adj.value=g; adjComp.value='sim'; adjScore.value=g.comp.sim.score; }
 async function saveAdj(){
   await api('/teacher/grades/override',{method:'POST',
-    body:{student_id:adj.value.id,component:adjComp.value,score:adjScore.value}});
+    body:{student_id:adj.value.id,component:adjComp.value,score:adjScore.value,reason:reason.value}});
   adj.value=null; grades.value=await api('/teacher/grades');
 }
 async function clearAdj(){
   await api('/teacher/grades/override',{method:'DELETE',
-    body:{student_id:adj.value.id,component:adjComp.value}});
+    body:{student_id:adj.value.id,component:adjComp.value,reason:reason.value}});
   adj.value=null; grades.value=await api('/teacher/grades');
 }
 const name={sim:'仿真',quiz:'自测',project:'课题',peer:'互评'};
@@ -85,11 +89,12 @@ const avg=computed(()=>{
   return a;
 });
 function exportCsv(){
+  const csv=value=>{let s=String(value??'');if(/^[\s]*[=+@-]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';};
   const head=['学号','姓名','仿真','自测','课题','互评','总分','等级'];
   const lines=grades.value.map(g=>[g.student_no,g.name,g.comp.sim.score,g.comp.quiz.score,
-    g.comp.project.score,g.comp.peer.score,g.total,gradeLetter(g.total)].join(','));
+    g.comp.project.score,g.comp.peer.score,g.total,gradeLetter(g.total)].map(csv).join(','));
   const blob=new Blob(['\ufeff'+[head.join(','),...lines].join('\n')],{type:'text/csv'});
-  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='霍尔效应课程成绩汇总.csv';a.click();
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='霍尔效应课程成绩汇总.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
 }
 onMounted(async()=>{ grades.value=await api('/teacher/grades'); });
 </script>

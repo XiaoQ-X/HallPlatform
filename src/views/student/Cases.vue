@@ -54,12 +54,13 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
+import { ref, computed, onMounted, watch } from 'vue';
+import { useRouter,useRoute } from 'vue-router';
 import Icon from '../../components/Icon.vue';
 import RichText from '../../components/RichText.vue';
 import { api } from '../../api';
 const router = useRouter();
+const route=useRoute();
 const rows = ref([]), current = ref(null), kw = ref(''), cat = ref('全部');
 const cats = computed(()=>['全部',...new Set(rows.value.map(x=>x.category))]);
 const filtered = computed(()=>rows.value.filter(x=>
@@ -72,5 +73,6 @@ function launch(){
     caseRef: 'case-'+c.id, caseTitle: c.title, config: c.sim_config }));
   router.push('/sim/lab');
 }
-onMounted(async()=>{ rows.value = await api('/resources/cases'); });
+onMounted(async()=>{ rows.value = await api('/resources/cases');if(route.query.id)await open({id:route.query.id}); });
+watch(()=>route.query.id,id=>{if(id)open({id});else current.value=null;});
 </script>

@@ -14,10 +14,11 @@
         <router-link to="/teacher/students" class="nav-item-dark" :class="isActive('/teacher/students')"><Icon name="users" /> 学生管理</router-link>
         <router-link to="/teacher/pushes" class="nav-item-dark" :class="isActive('/teacher/pushes')"><Icon name="send" /> 资源推送管理</router-link>
         <router-link to="/teacher/grades" class="nav-item-dark" :class="isActive('/teacher/grades')"><Icon name="award" /> 成绩汇总</router-link>
+        <router-link to="/teacher/review" class="nav-item-dark"><Icon name="check"/>教学评阅</router-link>
+        <router-link to="/teacher/rubrics" class="nav-item-dark"><Icon name="layers"/>量表管理</router-link>
         <router-link to="/teacher/appeals" class="nav-item-dark" :class="isActive('/teacher/appeals')"><Icon name="chat" /> 申诉处理</router-link>
       </div>
       <div class="pt-3 border-t border-white/10 space-y-1.5">
-        <router-link to="/" class="nav-item-dark"><Icon name="cap" /> 返回学生端</router-link>
         <div class="nav-item-dark" @click="auth.logout()"><Icon name="logout" /> 退出登录</div>
       </div>
     </aside>
@@ -53,7 +54,7 @@ const title = computed(() => ({
   '/teacher':'数据看板','/teacher/resources':'资源内容管理',
   '/teacher/students':'学生管理',
   '/teacher/pushes':'资源推送管理','/teacher/grades':'成绩汇总',
-  '/teacher/appeals':'申诉处理'
+  '/teacher/appeals':'申诉处理','/teacher/review':'教学评阅','/teacher/rubrics':'评价量表'
 }[route.path]));
 onMounted(()=>auth.fetchMe());
 </script>

@@ -15,9 +15,11 @@ export const useAuth = defineStore('auth', {
       return r;
     },
     async fetchMe() {
-      if (!this.token) return;
+      this.token=getToken();
+      if (!this.token){this.user=null;return;}
       this.user = await api('/me');
+      return this.user;
     },
-    logout() { this.token = null; this.user = null; clearToken(); location.href = '/login'; }
+    async logout() {const token=getToken();try{await api('/auth/logout',{method:'POST'});}finally{if(clearToken(token)){this.token=null;this.user=null;sessionStorage.clear();location.href='/login';}} }
   }
 });

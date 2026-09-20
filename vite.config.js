@@ -10,5 +10,5 @@ export default defineConfig({
       '/uploads': 'http://127.0.0.1:8181'
     }
   },
-  build: { outDir: 'dist', chunkSizeWarningLimit: 1600 }
+  build: { outDir: 'dist', chunkSizeWarningLimit: 1600, commonjsOptions:{include:[/node_modules/,/shared/]} }
 })

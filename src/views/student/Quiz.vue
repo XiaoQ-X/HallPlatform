@@ -9,7 +9,7 @@
         <p class="text-white/75 mt-2">检验你对霍尔效应原理、公式、仪器与应用的掌握程度。</p>
       </div>
       <div class="grid md:grid-cols-2 gap-5">
-        <div v-for="q in quizzes" :key="q.id" class="card-hover p-6">
+        <div v-for="q in sortedQuizzes" :key="q.id" class="card-hover p-6" :class="Number(route.query.id)===q.id?'ring-2 ring-brand-500':''">
           <div class="flex items-start">
             <div class="w-12 h-12 rounded-2xl bg-brand-50 text-brand-600 flex items-center justify-center"><Icon name="edit"/></div>
             <span class="ml-auto chip-gray">{{ q.question_ids.length }} 题 · {{ q.time_minutes }}分钟</span>
@@ -21,9 +21,11 @@
       </div>
       <div v-if="attempts.length" class="card p-6 mt-6">
         <h3 class="font-bold text-ink-900 mb-3">我的答题记录</h3>
-        <div v-for="a in attempts.slice(0,5)" :key="a.id" class="flex items-center text-sm py-2 border-b border-ink-50 last:border-0">
+        <div v-for="a in attempts" :key="a.id" class="flex flex-wrap items-center text-sm py-2 border-b border-ink-50 last:border-0">
           <span>{{ a.quiz_title }}</span><span class="ml-auto text-ink-400 text-xs">{{ a.submitted_at }}</span>
-          <b class="ml-4 text-brand-700 w-24 text-right">{{ a.score }}/{{ a.total }}</b>
+          <b class="ml-4 text-brand-700 w-24 text-right">{{ a.status==='pending'?'待阅卷':a.status==='started'?'作答中':a.status==='expired'?'已过期':a.score+'/'+a.total }}</b>
+          <button v-if="a.status==='started'" class="btn-soft ml-2" @click="resume(a)">继续答题</button>
+          <button v-if="['pending','graded'].includes(a.status)" class="btn-soft ml-2" @click="showAttempt(a)">查看</button>
         </div>
       </div>
     </div>
@@ -69,8 +71,8 @@
         </div>
       </div>
       <div class="flex gap-3 mt-5">
-        <button class="btn-ghost" @click="phase='list'">暂不提交</button>
-        <button class="btn-primary flex-1" @click="submit">提交答卷</button>
+        <button class="btn-ghost" @click="leave">保存并返回</button>
+        <button class="btn-primary flex-1" :disabled="submitting" @click="submit">提交答卷</button>
       </div>
     </div>
 
@@ -79,7 +81,7 @@
       <div class="card p-10 text-center">
         <div class="w-24 h-24 rounded-full mx-auto flex items-center justify-center text-white text-3xl shadow-glow"
           :style="{background:result.score/result.total>=0.6?'linear-gradient(135deg,#14b8a6,#0d9488)':'linear-gradient(135deg,#fb7185,#e11d48)'}">
-          {{ Math.round(result.score*100/result.total) }}</div>
+          {{ result.status==='pending'?'待阅卷':result.total>0?Math.round(result.score*100/result.total):'—' }}</div>
         <div class="text-sm text-ink-400 mt-3">本次得分（百分制）</div>
         <b class="text-2xl text-ink-900">{{ result.score }} / {{ result.total }} 分</b>
       </div>
@@ -104,37 +106,49 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue';
+import { ref, onMounted, onBeforeUnmount,watch,computed } from 'vue';
+import {useRoute} from 'vue-router';
 import Icon from '../../components/Icon.vue';
 import { api } from '../../api';
 const quizzes = ref([]), attempts = ref([]);
+const route=useRoute();const sortedQuizzes=computed(()=>[...quizzes.value].sort((a,b)=>Number(b.id===Number(route.query.id))-Number(a.id===Number(route.query.id))));
 const phase = ref('list');
 const quiz = ref({});
 const ans = ref({});
 const result = ref({});
 const qmap = ref({});
-let timer=null, remain=ref(0), startedAt=new Date().toISOString();
+let timer=null,draftTimer=null,deadline=null;const remain=ref(0),attemptId=ref(null),submitting=ref(false);
+watch(ans,()=>{clearTimeout(draftTimer);if(phase.value==='take')draftTimer=setTimeout(()=>saveDraft().catch(()=>{}),500);},{deep:true});
+async function saveDraft(){if(attemptId.value&&phase.value==='take'&&Date.now()<Date.parse(deadline))await api('/resources/attempts/'+attemptId.value+'/draft',{method:'PUT',body:{answers:ans.value}});}
+async function leave(){await saveDraft();clearInterval(timer);phase.value='list';attempts.value=await api('/resources/attempts');}
 const letter = k => String.fromCharCode(65+k);
 const fmt = s => `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
 function toggleMulti(id,k){ const a=ans.value[id]||[]; const i=a.indexOf(k);
   if(i>=0)a.splice(i,1); else a.push(k); ans.value[id]=a; }
 async function start(q){
   quiz.value = await api('/resources/quizzes/'+q.id);
-  ans.value={}; phase.value='take';
-  remain.value = (q.time_minutes||20)*60;
+  const a=await api('/resources/quizzes/'+q.id+'/start',{method:'POST'});take(a);
+}
+async function resume(row){const a=await api('/resources/attempts/'+row.id+'/resume');quiz.value={id:a.quiz_id,title:a.title};take(a);}
+function take(a){attemptId.value=a.attemptId;deadline=a.deadline;quiz.value.questions=a.questions;ans.value=a.answers;phase.value='take';
+  remain.value=Math.max(0,Math.ceil((Date.parse(deadline)-Date.now())/1000));
   clearInterval(timer);
-  timer=setInterval(()=>{ remain.value--; if(remain.value<=0){clearInterval(timer);submit();}},1000);
+  timer=setInterval(()=>{remain.value=Math.max(0,Math.ceil((Date.parse(deadline)-Date.now())/1000));if(remain.value<=0){clearInterval(timer);submit();}},1000);
 }
 async function submit(){
+  if(submitting.value)return;submitting.value=true;clearTimeout(draftTimer);
+  try{
   clearInterval(timer);
   result.value = await api('/resources/quizzes/'+quiz.value.id+'/attempt',
-    {method:'POST',body:{answers:ans.value,started_at:startedAt}});
-  const allq = await api('/resources/questions');
-  allq.forEach(x=>qmap.value[x.id]=x);
+    {method:'POST',body:{answers:ans.value,attemptId:attemptId.value}});
+  ans.value=result.value.answers||{};
+  result.value.detail.forEach(x=>qmap.value[x.id]=x);
   phase.value='result';
   attempts.value = await api('/resources/attempts');
+  }finally{submitting.value=false;}
 }
 function display(id){ const a=ans.value[id]; return Array.isArray(a)?a.sort().join(''):(a??'未作答'); }
+function showAttempt(a){ans.value=JSON.parse(a.answers||'{}');result.value={...a,detail:JSON.parse(a.detail||'[]')};qmap.value=Object.fromEntries(result.value.detail.map(d=>[d.id,d]));phase.value='result';}
 onMounted(async()=>{ quizzes.value=await api('/resources/quizzes'); attempts.value=await api('/resources/attempts'); });
-onBeforeUnmount(()=>clearInterval(timer));
+onBeforeUnmount(()=>{clearInterval(timer);clearTimeout(draftTimer);saveDraft().catch(()=>{});});
 </script>

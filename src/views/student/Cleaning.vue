@@ -34,7 +34,7 @@
               <button class="btn-soft text-xs" @click="openForm(a)">登记成因</button>
             </div>
           </div>
-          <div v-else class="text-center text-sm text-ink-400 py-8">该会话没有检测到异常，数据质量良好</div>
+          <div v-else class="text-center text-sm text-ink-400 py-8">未记录操作异常；数据质量仍需检查</div>
 
           <div class="divider-soft my-5"></div>
           <h3 class="font-bold text-ink-900 mb-3">完整组数据巡检</h3>
@@ -73,6 +73,7 @@
           <span class="text-sm text-ink-500">处理：{{ r.action }}</span>
           <span :class="['ml-auto chip text-[11px]',r.resolved?'!bg-brand-100 text-brand-800':'!bg-amber-100 text-amber-800']">{{ r.resolved?'已解决':'待跟进' }}</span>
           <button class="text-ink-400 hover:text-rose-500" @click="del(r)"><Icon name="trash":size="15"/></button>
+          <button class="text-brand-700" @click="editRecord(r)">编辑</button>
         </div>
         <div v-if="!records.length" class="text-center text-sm text-ink-400 py-6">还没有清洗记录</div>
       </div>
@@ -91,6 +92,7 @@
         <label class="text-xs text-ink-400">处理措施</label>
         <textarea v-model="form.action" class="input min-h-24 mb-3" placeholder="如：重新接线、重新稳定后采样…"></textarea>
         <label class="flex items-center gap-2 text-sm mb-4"><input type="checkbox" v-model="form.resolved" class="w-4 h-4 accent-brand-600"/> 已解决</label>
+        <label v-if="form.measurement_id" class="block mb-4">数据决策<select v-model="form.decision" class="input"><option value="keep">保留</option><option value="exclude">从有效数据集排除</option></select></label>
         <div class="flex gap-3"><button class="btn-ghost flex-1" @click="form=null">取消</button>
           <button class="btn-primary flex-1" @click="save">保存记录</button></div>
       </div>
@@ -107,15 +109,14 @@ const records = ref([]), form = ref(null);
 const causes = ['接线错误（线序/松动）','带电操作违反规程','电流设置不当','读数未稳定即记录','组内条件不一致','环境/设备干扰','系统误报','其他（在措施中说明）'];
 async function pick(s){ sel.value=s; const d=await api('/workshop/session-points/'+s.id);
   points.value=d.abnormals; groupList.value=d.groups; }
-function openForm(a){ form.value={ abnormal_code:a.code, point_label:a.detail||a.code, cause:causes[0], action:'', resolved:true, label:'会话#'+sel.value.id }; }
-function openManual(g){ form.value={ abnormal_code:'MANUAL_SUSPECT', point_label:g.group_id, cause:causes[7], action:'', resolved:false, label:'会话#'+sel.value.id }; }
+function openForm(a){form.value={session_id:sel.value.id,abnormal_code:a.code,point_label:a.detail||a.code,cause:causes[0],action:'',resolved:false,label:'会话#'+sel.value.id,decision:'keep'};}
+function openManual(g){form.value={session_id:sel.value.id,measurement_id:g.id,decision:g.decision||'keep',abnormal_code:'MANUAL_SUSPECT',point_label:g.group_id,cause:causes[7],action:'',resolved:false,label:'会话#'+sel.value.id};}
+function editRecord(r){form.value={...r,resolved:!!r.resolved};}
 async function save(){
-  await api('/workshop/cleaning',{method:'POST',body:{session_id:sel.value.id,label:form.value.label,
-    point_label:form.value.point_label,abnormal_code:form.value.abnormal_code,
-    cause:form.value.cause,action:form.value.action,resolved:form.value.resolved}});
-  form.value=null; load();
+  await api('/workshop/cleaning'+(form.value.id?'/'+form.value.id:''),{method:form.value.id?'PUT':'POST',body:form.value});
+  form.value=null; await load();if(sel.value)await pick(sel.value);
 }
-async function del(r){ await api('/workshop/cleaning/'+r.id,{method:'DELETE'}); load(); }
+async function del(r){ await api('/workshop/cleaning/'+r.id,{method:'DELETE'}); await load();if(sel.value)await pick(sel.value); }
 async function load(){ briefs.value=await api('/workshop/sessions-brief');
   records.value=await api('/workshop/cleaning'); }
 onMounted(load);

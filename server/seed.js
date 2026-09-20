@@ -88,9 +88,11 @@ function seed() {
     [...x,i]));
 
   // ========== 题库 ==========
-  const Q = (type,stem,options,answer,score,tags) =>
+  const Q = (type,stem,options,answer,scoreOrAnalysis,tagsOrScore,tag) => {
+    const analysis=tag?scoreOrAnalysis:'请结合课程原理核对各选项。';const score=Number(tag?tagsOrScore:scoreOrAnalysis),tags=tag||tagsOrScore;
     ins('INSERT INTO questions(type,stem,options,answer,analysis,score,tags) VALUES(?,?,?,?,?,?,?)',
-      [type,stem,options?JSON.stringify(options):null,answer,null,score,tags]);
+      [type,stem,options?JSON.stringify(options):null,answer,analysis,score,tags]);
+  };
   Q('single','霍尔电压的方向与下列哪一项无关？',
     ['工作电流方向','磁场方向','载流子带电符号','样品的长度'],'D','2','基础') ;
   Q('single','本实验中霍尔系数 R_H 的正确表达式是（d 为样品厚度）：',
@@ -241,6 +243,9 @@ function seed() {
       [s.id,'新实验任务','王老师发布了本周霍尔效应实验任务。','/sim/lab']);
   });
 
-  console.log('种子数据写入完成：教师 teacher/123456，学生 student/123456');
+  db.exec('UPDATE users SET must_change=1');
+  db.exec("UPDATE sim_sessions SET demo=1 WHERE unity_session LIKE 'demo-%'");
+  db.exec("UPDATE classes SET teacher_id=(SELECT id FROM users WHERE role='teacher' ORDER BY id LIMIT 1) WHERE teacher_id IS NULL");
+  console.log('演示数据已创建，公开初始密码账户已锁定，请使用管理员工具重置。');
 }
 seed();

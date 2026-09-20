@@ -1,0 +1,27 @@
+const { DatabaseSync } = require('node:sqlite');
+const path = require('path');
+const db = new DatabaseSync(path.join(__dirname, 'data', 'hall.db'));
+const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all();
+console.log('=== 表行数 ===');
+tables.forEach(t => {
+  const c = db.prepare('SELECT COUNT(*) c FROM "' + t.name + '"').get().c;
+  console.log(t.name, c);
+});
+console.log('\n=== 用户 ===');
+console.log(db.prepare('SELECT id,username,name,role,class_id,student_no,avatar FROM users ORDER BY id').all());
+console.log('\n=== 班级 ===');
+console.log(db.prepare('SELECT * FROM classes').all());
+console.log('\n=== 自测提交 ===');
+console.log(db.prepare('SELECT id,quiz_id,student_id,score,total,submitted_at FROM quiz_attempts ORDER BY id').all());
+console.log('\n=== 课题提交 ===');
+console.log(db.prepare('SELECT id,project_id,student_id,grade,submitted_at FROM project_submissions ORDER BY id').all());
+console.log('\n=== 作品 ===');
+console.log(db.prepare('SELECT id,student_id,item_type,title,recording FROM review_items ORDER BY id').all());
+console.log('\n=== 评价 ===');
+console.log(db.prepare('SELECT id,item_id,reviewer_id,rubric_id,scores FROM reviews ORDER BY id').all());
+console.log('\n=== 申诉 ===');
+console.log(db.prepare('SELECT id,ref_type,ref_id,student_id,status,reply FROM appeals ORDER BY id').all());
+console.log('\n=== 推送 ===');
+console.log(db.prepare('SELECT id,teacher_id,target_type,target_id,title FROM pushes ORDER BY id').all());
+console.log('\n=== 通知 ===');
+console.log(db.prepare('SELECT id,student_id,title,`read` FROM notifications ORDER BY id').all());

@@ -17,11 +17,12 @@
         </div>
         <div class="ml-auto flex gap-2">
           <button class="btn-ghost" @click="restart"><Icon name="refresh":size="16"/> 重新开始</button>
-          <button class="btn-soft" @click="finish"><Icon name="check":size="16"/> 结束实验</button>
+          <button class="btn-soft" :disabled="!initialized" @click="finish"><Icon name="check":size="16"/> 结束实验</button>
           <button class="btn-primary" @click="fullscreen"><Icon name="cap":size="16"/> 全屏</button>
         </div>
       </div>
 
+      <p class="text-sm mt-2" role="status">{{saveStatus}} <span class="text-rose-600">{{error}}</span></p>
       <!-- 进度 -->
       <div class="mt-4 flex items-center gap-3 px-1">
         <Icon name="chart":size="15" class="text-brand-500"/>
@@ -29,7 +30,7 @@
           <div class="h-full rounded-full bg-gradient-to-r from-brand-400 to-brand-600 transition-all"
             :style="{width: progressPct+'%'}"></div>
         </div>
-        <span class="text-xs text-ink-500 w-28">完整组 {{ groups.length }} · 方向 {{ doneDir }}/4</span>
+        <span class="text-xs text-ink-500 w-36">完整组 {{ groups.length }} · 本组方向 {{ doneDir }}/4</span>
       </div>
 
       <!-- 案例探究任务 -->
@@ -122,6 +123,7 @@ import { ref, onMounted, onBeforeUnmount, computed } from 'vue';
 import katex from 'katex';
 import Icon from '../../components/Icon.vue';
 import { api } from '../../api';
+import {createOutbox} from '../../sim-outbox';
 
 const frame = ref(null);
 const psid = ref(null), loading = ref(true);
@@ -131,7 +133,9 @@ const measurements = ref([]);
 const abnormals = ref([]);
 const tab = ref('data');
 const tabs = [ {k:'data',label:'测量数据'},{k:'log',label:'事件流'},{k:'help',label:'操作指引'} ];
-let queue = [], inited = false;
+let outbox=null, inited=false, accepting=false, timer=null;
+const seenEvents = new Set();
+const initialized=ref(false),saveStatus=ref('未建立会话'),error=ref('');
 const pending = ref({ caseRef:'', caseTitle:'', taskTitle:'', taskGoal:'', cfg:null });
 function loadPending(){
   try{
@@ -148,8 +152,8 @@ function loadPending(){
 
 const groups = computed(()=> measurements.value.filter(m=>m.groupComplete));
 const lastRaw = computed(()=> measurements.value[measurements.value.length-1]);
-const doneDir = computed(()=> 4-(state.value.pendingDirections||0));
-const progressPct = computed(()=> Math.min(100, groups.value.length*16 + doneDir.value*4));
+const doneDir = computed(()=>{const last=lastRaw.value;if(!last)return 0;return new Set(measurements.value.filter(m=>m.groupId===last.groupId).map(m=>m.slot)).size;});
+const progressPct = computed(()=>doneDir.value/4*100);
 const taskHtml = computed(()=>{
   const t = pending.value.taskGoal;
   if(!t) return '';
@@ -163,55 +167,52 @@ function send(method, payload) {
 }
 async function init() {
   const c = pending.value.cfg;
-  send('InitExperiment', { schemaVersion:1, caseId:'hall-basic',
+  accepting=true;
+  send('InitExperiment', { schemaVersion:1, caseId:pending.value.caseRef||'hall-basic',
     material: c?.material || 'n-silicon',
     thickness_mm: c?.thickness_mm ?? 0.5,
     maxIs_mA: c?.maxIs_mA ?? 10,
     maxIm_A: c?.maxIm_A ?? 1 });
 }
 async function onMessage(e) {
-  if (e.origin !== location.origin) return;
+  if (e.origin !== location.origin||e.source!==frame.value?.contentWindow||!e.data) return;
   const d = e.data;
+  if(d.source==='hall-host'&&d.error){error.value=d.error;return;}
   if (d.source === 'hall-host' && d.ready) {
-    loading.value = false;
     if (!inited) {
       inited = true;
-      const r = await api('/sim/start', { method:'POST', body:{ case_id: pending.value.caseRef || 'hall-basic' }});
-      psid.value = r.platformSessionId;
-      init();
+      try{const me=await api('/me');outbox=createOutbox(me.id,s=>saveStatus.value=s);await outbox.flush();await newSession();timer=setInterval(()=>{outbox.flush().catch(()=>{});if(accepting)send('RequestSnapshot');},3000);}catch(e){error.value=e.message;inited=false;}
     }
   }
   if (d.source === 'hall-unity') {
     const ev = d.event;
+    if(!ev||!accepting||ev.isDemo||ev.type==='OnReady')return;
+    if(ev.type==='OnSnapshot'){if(ev.state)state.value=ev.state;return;}
+    if(!ev.eventId||seenEvents.has(ev.eventId))return;
+    seenEvents.add(ev.eventId);
     events.value.push(ev);
-    if (ev.isDemo) return;
-    queue.push(ev);
+    if(ev.code==='InitExperiment'&&ev.success){initialized.value=true;loading.value=false;}
+    if(ev.code==='INVALID_INIT'){error.value=ev.detail;accepting=false;initialized.value=false;return;}
+    try{outbox.enqueue(psid.value,ev);}catch(e){error.value='本地保存失败，请暂停实验：'+e.message;accepting=false;return;}
     if (ev.state) state.value = ev.state;
     if (ev.type === 'OnMeasureData' && ev.measurement) measurements.value.push(ev.measurement);
     if (ev.type === 'OnAbnormalEvent') abnormals.value.push(ev);
-    if (ev.type === 'OnExperimentComplete') await flush(true);
+    if (ev.type === 'OnExperimentComplete') {initialized.value=false;await outbox.flush().catch(()=>{});}
   }
 }
-async function flush(force) {
-  if (!queue.length) return;
-  const q = queue; queue = [];
-  try { await api('/sim/events', { method:'POST', body:{ platformSessionId: psid.value, events: q }}); }
-  catch { queue = q.concat(queue); }
-}
-const timer = setInterval(()=>flush(), 3000);
-
-async function restart() {
-  await flush(true);
-  send('ResetExperiment');
-  await new Promise(r=>setTimeout(r,800));
+async function newSession(){
+  accepting=false;initialized.value=false;
   const r = await api('/sim/start', { method:'POST', body:{ case_id: pending.value.caseRef || 'hall-basic' }});
   psid.value = r.platformSessionId;
-  state.value={}; events.value=[]; measurements.value=[]; abnormals.value=[]; queue=[];
+  pending.value.cfg=r.config;
+  seenEvents.clear();
+  state.value={}; events.value=[]; measurements.value=[]; abnormals.value=[];
   init();
 }
-function finish() { send('FinishFromWeb'); setTimeout(()=>flush(true), 1500); }
+async function restart(){if(!outbox)return;if(!confirm('结束当前操作并新建实验？已保存数据会保留。'))return;try{await outbox.flush();if(psid.value&&!state.value.finished)await api('/sim/sessions/'+psid.value+'/abandon',{method:'POST'});await newSession();}catch(e){error.value=e.message;}}
+function finish() { if(initialized.value)send('FinishFromWeb'); }
 function fullscreen() { frame.value.requestFullscreen?.(); }
 
 onMounted(()=>{ loadPending(); window.addEventListener('message', onMessage); });
-onBeforeUnmount(()=>{ clearInterval(timer); flush(true); window.removeEventListener('message', onMessage); });
+onBeforeUnmount(()=>{clearInterval(timer);outbox?.flush().catch(()=>{});window.removeEventListener('message',onMessage);});
 </script>

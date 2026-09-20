@@ -2,6 +2,7 @@
 <script setup>
 import { ref, watch, onMounted } from 'vue';
 import katex from 'katex';
+import DOMPurify from 'dompurify';
 const props = defineProps({ html: String });
 const el = ref();
 function render(){
@@ -12,7 +13,7 @@ function render(){
     blocks.push(katex.renderToString(d || i, { displayMode: !!d, throwOnError: false }));
     return `@@K${blocks.length-1}@@`;
   });
-  el.value.innerHTML = src;
+  el.value.innerHTML = DOMPurify.sanitize(src,{USE_PROFILES:{html:true}});
   el.value.innerHTML = el.value.innerHTML.replace(/@@K(\d+)@@/g, (m, k) => blocks[+k] || m);
 }
 onMounted(render);

@@ -34,14 +34,14 @@
           <div class="flex-1">
             <div class="font-bold text-ink-900">{{ x.title }}</div>
             <div class="text-sm text-ink-400 mt-1">{{ x.summary }}</div>
-            <video v-if="x.recording" :src="x.recording" controls class="mt-3 rounded-2xl max-h-64"></video>
+            <ProtectedFile v-if="x.recording" :src="x.recording" video/>
           </div>
           <span class="chip">{{ x.reviews.length }} 条评价</span>
         </div>
         <div v-if="x.reviews.length" class="mt-4 space-y-3">
           <div v-for="rv in x.reviews" :key="rv.id" class="p-4 rounded-2xl bg-ink-50/70">
             <div class="flex items-center text-sm"><b>{{ rv.reviewer_name }}</b>
-              <span class="ml-auto font-bold text-brand-700">{{ totalOf(rv) }} 分</span></div>
+              <span class="ml-auto font-bold text-brand-700">{{rv.voided?'已撤销（不计分）':totalOf(rv)+' 分'}}</span></div>
             <p class="text-sm text-ink-600 mt-1.5">{{ rv.comment }}</p>
             <button class="text-xs text-rose-500 mt-2" @click="openAppeal(x,rv)">对评价有异议？发起申诉</button>
           </div>
@@ -65,13 +65,16 @@
       <div class="modal p-6 w-full max-w-2xl">
         <h3 class="font-bold text-lg text-ink-900">{{ current.title }}</h3>
         <div class="text-xs text-ink-400 mt-1">{{ current.student_name }} · {{ current.created_at }}</div>
-        <video v-if="current.recording" :src="current.recording" controls class="w-full rounded-2xl mt-3 max-h-56"></video>
+        <ProtectedFile v-if="current.recording" :src="current.recording" video/>
+        <ProtectedFile v-for="f in current.files||[]" :src="f.url" :name="f.name"/>
         <p class="text-sm text-ink-600 mt-3 leading-7 bg-ink-50 rounded-2xl p-4">{{ current.summary }}</p>
+        <details v-if="current.evidence?.content" open class="mt-3"><summary>课题报告证据 · v{{current.evidence.version}}</summary><p class="whitespace-pre-wrap break-words py-3">{{current.evidence.content}}</p><ProtectedFile v-for="f in current.evidence.files||[]" :src="f.url" :name="f.name"/></details>
+        <details v-if="current.evidence?.measurements" class="mt-3"><summary>实验原始测量证据</summary><pre class="text-xs whitespace-pre-wrap break-words">{{JSON.stringify(current.evidence.measurements,null,2)}}</pre></details>
 
         <div class="mt-4 flex items-center gap-2">
           <span class="text-sm text-ink-600">评分量表：</span>
-          <select v-model="rubricId" class="input flex-1">
-            <option v-for="r in rubrics" :key="r.id" :value="r.id">{{ r.title }}</option></select>
+          <select v-model="rubricId" class="input flex-1" :disabled="!!current.rubric_id" @change="resetScores">
+            <option v-for="r in rubrics.filter(r=>r.target_type===current.item_type)" :key="r.id" :value="r.id">{{ r.title }}</option></select>
         </div>
 
         <div v-if="rubric" class="mt-4 space-y-4">
@@ -97,32 +100,40 @@
         <h3 class="font-bold text-lg text-ink-900 mb-4">发布作品</h3>
         <label class="text-xs text-ink-400">作品类型</label>
         <select v-model="pub.item_type" class="input mb-3"><option value="experiment">实验操作</option><option value="project">课题成果</option></select>
+        <label class="block">评价量表<select v-model="pub.rubric_id" class="input"><option v-for="r in rubrics.filter(r=>r.target_type===pub.item_type)" :value="r.id">{{r.title}}</option></select></label>
+        <label v-if="pub.item_type==='experiment'" class="block">实验会话<select v-model="pub.session_id" class="input"><option v-for="s in sessions.filter(s=>s.finished&&!s.demo)" :value="s.id">#{{s.id}} · {{s.started_at}}</option></select></label>
+        <label v-else class="block">课题成果<select v-model="pub.submission_id" class="input"><option v-for="s in submissions" :value="s.id">{{s.project_title}} · v{{s.version}}</option></select></label>
         <label class="text-xs text-ink-400">标题</label><input v-model="pub.title" class="input mb-3" placeholder="如：霍尔效应四方向测量实验"/>
         <label class="text-xs text-ink-400">摘要</label><textarea v-model="pub.summary" class="input min-h-20 mb-3" placeholder="简要描述你的实验过程与结果…"></textarea>
         <label class="btn-ghost cursor-pointer w-full justify-center"><Icon name="video":size="16"/> 上传操作录屏
           <input type="file" accept="video/*" class="hidden" @change="onVideo"/></label>
         <span v-if="pub.recording" class="text-xs text-brand-600 mt-2 block">录屏已上传：{{ pub.recording }}</span>
         <div class="flex gap-3 mt-5"><button class="btn-ghost flex-1" @click="showPublish=false">取消</button>
-          <button class="btn-primary flex-1" @click="doPublish">发布</button></div>
+          <button class="btn-primary flex-1" :disabled="publishing||uploading" @click="doPublish">发布</button></div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted,watch } from 'vue';
 import Icon from '../../components/Icon.vue';
 import { api, upload } from '../../api';
+import ProtectedFile from '../../components/ProtectedFile.vue';
 const tab = ref('todo');
 const tabs = [ {k:'todo',label:'待评作品',icon:'users'},{k:'mine',label:'我的作品',icon:'award'},{k:'gave',label:'我发出的评价',icon:'check'} ];
 const items = ref([]), myItems = ref([]), gave = ref([]), rubrics = ref([]);
 const current = ref(null), rubricId = ref(null), scores = ref({}), comment = ref('');
 const showPublish = ref(false);
 const pub = ref({ item_type:'experiment', title:'', summary:'', recording:'' });
+const sessions=ref([]),submissions=ref([]);
+const publishing=ref(false),uploading=ref(false);
+watch(()=>pub.value.item_type,()=>{pub.value.rubric_id=rubrics.value.find(r=>r.target_type===pub.value.item_type)?.id;pub.value.session_id=null;pub.value.submission_id=null;});
+function resetScores(){scores.value=Object.fromEntries((rubric.value?.dimensions||[]).map(d=>[d.name,0]));}
 
 const rubric = computed(()=> rubrics.value.find(r=>r.id===rubricId.value));
 async function openItem(x){ current.value = await api('/peer/items/'+x.id);
-  rubricId.value = rubrics.value[0]?.id; scores.value={}; comment.value='';
+  rubricId.value=current.value.rubric_id||rubrics.value.find(r=>r.target_type===current.value.item_type)?.id;resetScores();comment.value='';
   const myrv = current.value.reviews.find(r=>r.mine);
   if(myrv){ scores.value=myrv.scores; comment.value=myrv.comment; rubricId.value=myrv.rubric_id||rubricId.value; }
 }
@@ -133,11 +144,14 @@ async function submitReview(){
     body:{rubric_id:rubricId.value,scores:scores.value,comment:comment.value}});
   current.value=null; load();
 }
-async function onVideo(e){ const r=await upload(e.target.files[0]); pub.value.recording=r.url; }
+async function onVideo(e){if(!e.target.files[0]||uploading.value)return;uploading.value=true;const target=pub.value;try{const r=await upload(e.target.files[0]);if(pub.value===target)pub.value.recording=r.url;}finally{uploading.value=false;}}
 async function doPublish(){
+  if(publishing.value||uploading.value)return;
   if(!pub.value.title)return alert('请填写标题');
-  await api('/peer/items',{method:'POST',body:pub.value});
-  showPublish=false; pub.value={item_type:'experiment',title:'',summary:'',recording:''}; load();
+  publishing.value=true;try{const result=await api('/peer/items',{method:'POST',body:pub.value});
+  if(result.reused)alert('该版本已发布，已保留原作品及其评价。');
+  showPublish.value=false;pub.value={item_type:'experiment',title:'',summary:'',recording:'',rubric_id:rubrics.value.find(r=>r.target_type==='experiment')?.id};load();
+  }finally{publishing.value=false;}
 }
 function openAppeal(x,rv){ location.hash=''; window.sessionStorage.setItem('appeal_ref',JSON.stringify({ref_type:'review',ref_id:rv.id})); location.href='/peer/appeals'; }
 async function load(){
@@ -145,6 +159,8 @@ async function load(){
   myItems.value=await api('/peer/my-items');
   gave.value=await api('/peer/my-reviews');
   rubrics.value=await api('/peer/rubrics');
+  sessions.value=await api('/sim/sessions');submissions.value=await api('/resources/my-submissions');
+  if(!pub.value.rubric_id)pub.value.rubric_id=rubrics.value.find(r=>r.target_type===pub.value.item_type)?.id;
 }
 onMounted(load);
 </script>

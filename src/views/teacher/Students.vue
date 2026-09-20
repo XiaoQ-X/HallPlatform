@@ -40,13 +40,13 @@
             <input v-model="form.student_no" class="input"/></div>
           <div><label class="text-xs text-ink-400">班级</label>
             <select v-model="form.class_id" class="input">
-              <option :value="null">未分班</option>
+              <option :value="null" disabled>请选择任课班级</option>
               <option v-for="c in classes" :key="c.id" :value="c.id">{{ c.name }}</option></select></div>
         </div>
         <label class="text-xs text-ink-400 mt-3 block">头像</label>
         <input v-model="form.avatar" class="input mb-3" placeholder="emoji"/>
         <label v-if="!form.id" class="text-xs text-ink-400 block">初始密码</label>
-        <input v-if="!form.id" v-model="form.password" class="input mb-3" placeholder="初始密码"/>
+        <input v-if="!form.id" v-model="form.password" type="password" autocomplete="new-password" class="input mb-3" placeholder="至少10位初始密码"/>
         <div class="flex gap-3 mt-2"><button class="btn-ghost flex-1" @click="form=null">取消</button>
           <button class="btn-primary flex-1" @click="save">保存</button></div>
       </div>
@@ -81,6 +81,7 @@ async function load(){
 function newStudent(){ form.value = { username:'', password:'', name:'', student_no:'', class_id:classes.value[0]?.id, avatar:'🧑‍🎓' }; }
 function edit(s){ form.value = { ...s }; }
 async function save(){
+  if(!form.value.class_id)return alert('请先创建并选择班级');
   if(form.value.id) await api('/teacher/students/'+form.value.id,{method:'PUT',body:form.value});
   else await api('/teacher/students',{method:'POST',body:form.value});
   form.value=null; load();

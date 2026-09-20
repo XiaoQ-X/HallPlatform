@@ -26,7 +26,7 @@
             <option v-for="r in resOptions" :key="r.id" :value="r.id">{{ r.title }}</option></select>
           <input v-else class="input" disabled placeholder="选择类型后可关联"/></div>
       </div>
-      <button class="btn-primary w-full mt-5" @click="send"><Icon name="send":size="16"/> 立即推送</button>
+      <button class="btn-primary w-full mt-5" :disabled="sending" @click="send"><Icon name="send":size="16"/> 立即推送</button>
     </div>
 
     <div class="card p-6">
@@ -49,16 +49,20 @@ import Icon from '../../components/Icon.vue';
 import { api } from '../../api';
 const form=ref({target_type:'class',target_id:null,title:'',message:'',resource_type:'',resource_id:null});
 const classes=ref([]),students=ref([]),history=ref([]),resOptions=ref([]);
+const sending=ref(false);
+watch(()=>form.value.target_type,()=>form.value.target_id=null);
 watch(()=>form.value.resource_type, async t=>{
   resOptions.value=[]; form.value.resource_id=null;
   const map={case:'/resources/cases',ideology:'/resources/ideology',quiz:'/resources/quizzes',project:'/resources/projects'};
-  if(map[t]) resOptions.value=await api(map[t]);
+  if(map[t]){const rows=await api(map[t]);if(form.value.resource_type===t)resOptions.value=rows.filter(r=>r.published&&!r.archived);}
 });
 async function send(){
+  if(sending.value)return;
   if(!form.value.title||!form.value.target_id)return alert('请完善推送信息');
+  sending.value=true;try{
   await api('/teacher/pushes',{method:'POST',body:form.value});
   form.value={target_type:'class',target_id:null,title:'',message:'',resource_type:'',resource_id:null};
-  load();
+  await load();}finally{sending.value=false;}
 }
 async function load(){
   classes.value=await api('/auth/classes');

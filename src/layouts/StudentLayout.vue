@@ -17,6 +17,7 @@
           <router-link to="/" class="nav-item" :class="isActive('/')" active-class="">
             <Icon name="home" /> <span v-if="!collapsed">学习首页</span>
           </router-link>
+          <router-link to="/grades" class="nav-item"><Icon name="award"/><span v-if="!collapsed">我的成绩</span></router-link>
           <router-link to="/sim/lab" class="nav-item" :class="isActive('/sim/lab')">
             <Icon name="flask" /> <span v-if="!collapsed">仿真实验</span>
             <span v-if="!collapsed" class="ml-auto chip">核心</span>
@@ -48,7 +49,7 @@
         <div class="ml-auto flex items-center gap-3">
           <!-- 通知 -->
           <div class="relative">
-            <button class="w-11 h-11 rounded-2xl bg-white/80 border border-ink-100 flex items-center justify-center text-ink-600 hover:text-brand-600 relative" @click="showNoti=!showNoti">
+            <button aria-label="通知中心" title="通知中心" class="w-11 h-11 rounded-2xl bg-white/80 border border-ink-100 flex items-center justify-center text-ink-600 hover:text-brand-600 relative" @click="showNoti=!showNoti">
               <Icon name="bell" :size="19" />
               <span v-if="unread" class="absolute -top-0.5 -right-0.5 min-w-5 h-5 px-1 rounded-full bg-rose-500 text-white text-[10px] flex items-center justify-center">{{ unread }}</span>
             </button>
@@ -68,6 +69,7 @@
                   </div>
                 </div>
                 <div v-if="!notis.length" class="text-center text-sm text-ink-400 py-8">暂无通知</div>
+                <button v-if="notis.length>=50" class="btn-soft" @click="loadOlder">更早通知</button>
               </div>
             </div>
           </div>
@@ -78,7 +80,7 @@
               <div class="text-sm font-semibold text-ink-800">{{ auth.user?.name }}</div>
               <div class="text-[11px] text-ink-400">{{ auth.user?.class_name || '学生' }}</div>
             </div>
-            <button class="text-ink-400 hover:text-rose-500 ml-1" @click.stop="auth.logout"><Icon name="logout" :size="18" /></button>
+            <button aria-label="退出登录" title="退出登录" class="text-ink-400 hover:text-rose-500 ml-1" @click.stop="auth.logout"><Icon name="logout" :size="18" /></button>
           </div>
         </div>
       </header>
@@ -90,7 +92,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted,onBeforeUnmount } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import Icon from '../components/Icon.vue';
 import ProfileModal from '../components/ProfileModal.vue';
@@ -121,7 +123,7 @@ const groups = [
 ];
 
 const titleMap = {
-  '/': '学习首页', '/sim/lab': '仿真实验',
+  '/': '学习首页', '/sim/lab': '仿真实验', '/grades':'我的成绩',
   '/resources/cases': '应用案例库', '/resources/ideology': '思政素材库',
   '/resources/quiz': '思考题 / 自测题', '/resources/projects': '自主探究课题包',
   '/workshop/cleaning': '数据清洗台', '/workshop/uncertainty': '不确定度计算器',
@@ -131,13 +133,14 @@ const title = computed(() => titleMap[route.path] || '霍尔效应平台');
 const isActive = p => route.path === p ? 'active' : '';
 
 const notis = ref([]), showNoti = ref(false);
-const unread = computed(() => notis.value.filter(n => !n.read).length);
-async function loadNoti() { notis.value = await api('/notifications'); }
+const unread=ref(0);let notiTimer;
+async function loadNoti(){notis.value=await api('/notifications');unread.value=(await api('/notifications-count')).unread;}
+async function loadOlder(){const older=await api('/notifications?before='+notis.value.at(-1).id);notis.value.push(...older);}
 async function readAll() { await api('/notifications/read-all', { method: 'PUT' }); loadNoti(); }
-function openNoti(n) {
-  api('/notifications/' + n.id + '/read', { method: 'PUT' });
-  loadNoti();
+async function openNoti(n) {
+  await api('/notifications/' + n.id + '/read', { method: 'PUT' });
+  await loadNoti();showNoti.value=false;
   if (n.link) router.push(n.link);
 }
-onMounted(async () => { await auth.fetchMe(); loadNoti(); setInterval(loadNoti, 60000); });
+onMounted(async()=>{await auth.fetchMe();await loadNoti();notiTimer=setInterval(()=>loadNoti().catch(()=>{}),60000);});onBeforeUnmount(()=>clearInterval(notiTimer));
 </script>

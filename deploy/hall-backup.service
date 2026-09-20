@@ -1,0 +1,5 @@
+[Unit]
+Description=Consistent Hall Platform Backup
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/hall/current/deploy/backup.sh

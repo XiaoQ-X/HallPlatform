@@ -36,7 +36,7 @@
 
 <script setup>
 import { reactive, ref, watch } from 'vue';
-import { api } from '../api';
+import { api, setToken } from '../api';
 import { useAuth } from '../stores/auth';
 const props = defineProps({ user: Object });
 const emit = defineEmits(['close','saved']);
@@ -51,6 +51,7 @@ async function save(){
     const body = { name:form.name, avatar:form.avatar };
     if(newPassword.value){ body.oldPassword=oldPassword.value; body.newPassword=newPassword.value; }
     const r = await api('/auth/me', { method:'PUT', body });
+    if(r.token){setToken(r.token);auth.token=r.token;}
     auth.user = r.user;
     emit('saved', r.user); emit('close');
   } catch(e){ error.value = e.message; }

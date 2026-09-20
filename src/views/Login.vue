@@ -61,17 +61,14 @@
           {{ mode==='login'?'登 录':'注 册' }}
         </button>
 
-        <div class="mt-5 text-center text-sm text-ink-400">
+        <div v-if="false" class="mt-5 text-center text-sm text-ink-400">
           {{ mode==='login'?'还没有账号？':'已有账号？' }}
           <button class="text-brand-600 font-medium" @click="mode=mode==='login'?'register':'login';error=''">
             {{ mode==='login'?'立即注册':'去登录' }}
           </button>
         </div>
 
-        <div class="mt-8 card p-4 text-sm text-ink-500 flex flex-wrap gap-x-6 gap-y-1.5 justify-center">
-          <span>教师 <b class="text-brand-700">teacher / 123456</b></span>
-          <span>学生 <b class="text-brand-700">student / 123456</b></span>
-        </div>
+        <p class="mt-6 text-sm text-ink-500 text-center">学生账号由任课教师分配</p>
       </div>
     </div>
   </div>
@@ -87,8 +84,6 @@ const mode = ref('login');
 const form = reactive({ username:'', password:'', name:'', class_id:null, student_no:'' });
 const classes = ref([]);
 const error = ref('');
-onMounted(async()=>{ classes.value = await api('/auth/classes');
-  if(classes.value.length) form.class_id = classes.value[0].id; });
 async function submit() {
   error.value = '';
   try {

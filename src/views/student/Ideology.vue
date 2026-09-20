@@ -47,13 +47,16 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import Icon from '../../components/Icon.vue';
 import RichText from '../../components/RichText.vue';
 import { api } from '../../api';
+import {useRoute} from 'vue-router';
+const route=useRoute();
 const rows = ref([]), current = ref(null), cat = ref('全部');
 const cats = computed(()=>['全部',...new Set(rows.value.map(x=>x.category))]);
 const filtered = computed(()=>rows.value.filter(x=>cat.value==='全部'||x.category===cat.value));
 async function open(x){ current.value = await api('/resources/ideology/'+x.id); }
-onMounted(async()=>{ rows.value = await api('/resources/ideology'); });
+onMounted(async()=>{ rows.value = await api('/resources/ideology');if(route.query.id)await open({id:route.query.id}); });
+watch(()=>route.query.id,id=>{if(id)open({id});else current.value=null;});
 </script>

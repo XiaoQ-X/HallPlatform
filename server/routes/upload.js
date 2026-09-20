@@ -1,27 +1,16 @@
-module.exports = (() => {
-  const r = require('express').Router();
-  const path = require('path');
-  const fs = require('fs');
-  const multer = require('multer');
-  const dir = path.join(__dirname, '..', '..', 'uploads');
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  const storage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, dir),
-    filename: (req, file, cb) => {
-      const ext = path.extname(Buffer.from(file.originalname, 'latin1').toString('utf8'));
-      cb(null, Date.now() + '-' + Math.random().toString(36).slice(2, 8) + ext);
-    }
-  });
-  const upload = multer({ storage, limits: { fileSize: 200 * 1024 * 1024 } });
-
-  r.post('/', upload.single('file'), (req, res) => {
-    if (!req.file) return res.status(400).json({ error: '未收到文件' });
-    res.json({ url: '/uploads/' + req.file.filename, name:
-      Buffer.from(req.file.originalname, 'latin1').toString('utf8'), size: req.file.size });
-  });
-  r.post('/multi', upload.array('files', 10), (req, res) => {
-    res.json((req.files || []).map(f => ({ url: '/uploads/' + f.filename,
-      name: Buffer.from(f.originalname, 'latin1').toString('utf8'), size: f.size })));
-  });
-  return r;
-})();
+const r=require('express').Router(),fs=require('fs'),path=require('path'),crypto=require('crypto'),multer=require('multer');
+const {db,fail,transaction}=require('../common');
+const dir=process.env.HALL_UPLOAD_DIR||path.join(__dirname,'../../uploads');fs.mkdirSync(dir,{recursive:true});
+const types={'.pdf':'application/pdf','.mp4':'video/mp4','.webm':'video/webm','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.txt':'text/plain','.csv':'text/csv','.docx':'application/vnd.openxmlformats-officedocument.wordprocessingml.document','.xlsx':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'};
+const active=new Set();r.use((req,res,next)=>{if(active.has(req.user.id))return next(Object.assign(Error('请等待当前上传完成'),{status:429}));const used=db.prepare('SELECT COALESCE(SUM(size),0) size FROM files WHERE owner_id=?').get(req.user.id).size;const length=Number(req.headers['content-length']);if(!Number.isFinite(length)||length<=0||used+length>1024*1024*1024)return next(Object.assign(Error('上传超过剩余容量或缺少长度'),{status:413}));active.add(req.user.id);const release=()=>active.delete(req.user.id);res.once('close',release);next();});
+const upload=multer({storage:multer.diskStorage({destination:dir,filename:(req,file,cb)=>cb(null,crypto.randomUUID()+path.extname(file.originalname).toLowerCase())}),limits:{fileSize:200*1024*1024,files:10,fields:5},fileFilter:(req,f,cb)=>cb(types[path.extname(f.originalname).toLowerCase()]?null:Object.assign(Error('不支持的文件类型'),{status:400}),true)});
+function matches(file){const fd=fs.openSync(file.path,'r'),buf=Buffer.alloc(16);try{fs.readSync(fd,buf,0,16,0);}finally{fs.closeSync(fd);}const ext=path.extname(file.path);if(ext==='.pdf')return buf.subarray(0,5).toString()==='%PDF-';if(ext==='.mp4')return buf.subarray(4,8).toString()==='ftyp';if(ext==='.webm')return buf.subarray(0,4).equals(Buffer.from([0x1a,0x45,0xdf,0xa3]));if(ext==='.png')return buf.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]));if(['.jpg','.jpeg'].includes(ext))return buf[0]===255&&buf[1]===216&&buf[2]===255;if(['.docx','.xlsx'].includes(ext))return buf[0]===80&&buf[1]===75;return true;}
+function handle(multi){return(req,res,next)=>{const middleware=multi?upload.array('files',10):upload.single('file');middleware(req,res,err=>{
+  const files=multi?(req.files||[]):req.file?[req.file]:[];
+  try{if(err)throw Object.assign(err,{status:400});if(!files.length)fail('未收到文件');if(files.some(f=>!matches(f)))fail('文件内容与类型不符');
+    const used=db.prepare('SELECT COALESCE(SUM(size),0) size FROM files WHERE owner_id=?').get(req.user.id).size;
+    if(used+files.reduce((s,f)=>s+f.size,0)>1024*1024*1024)fail('个人文件容量超过1GB',413);
+    const result=transaction(()=>files.map(f=>{const id=crypto.randomUUID();const name=Buffer.from(f.originalname,'latin1').toString('utf8');db.prepare('INSERT INTO files(id,owner_id,name,path,mime,size) VALUES(?,?,?,?,?,?)').run(id,req.user.id,name,f.filename,types[path.extname(f.path)],f.size);return{id,url:'/api/files/'+id,name,size:f.size};}));res.json(multi?result:result[0]);
+  }catch(e){for(const f of files)if(fs.existsSync(f.path))fs.unlinkSync(f.path);next(e);}
+});};}
+r.post('/',handle(false));r.post('/multi',handle(true));module.exports=r;
