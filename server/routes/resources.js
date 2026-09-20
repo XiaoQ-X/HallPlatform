@@ -29,7 +29,7 @@ function validate(table,b,user){
   }
   if(table==='quizzes'){number(b.time_minutes,'时长',1,180);if(!Array.isArray(b.question_ids)||!b.question_ids.length||new Set(b.question_ids).size!==b.question_ids.length)fail('题目列表无效');if(questions({question_ids:JSON.stringify(b.question_ids)}).some(q=>q.owner_id!==user.id))fail('题目不属于本人课程',403);}
   if(table==='projects'){if(!Array.isArray(b.tasks)||!b.tasks.length||b.tasks.some(t=>!t.t?.trim()))fail('请填写任务清单');b.attachments=validFiles(user,b.attachments||[]);}
-  if(table==='cases'&&b.sim_config){const c=b.sim_config;number(c.maxIs_mA,'工作电流量程',.1,10);number(c.maxIm_A,'励磁电流量程',.01,1);if(c.material!=='n-silicon'||c.thickness_mm!==.5)fail('现有引擎仅支持N型硅、0.5mm、10mA/1A');}
+  if(table==='cases'&&b.sim_config){const c=b.sim_config;if(c.maxIs_mA!=null)number(c.maxIs_mA,'工作电流量程',.1,10);if(c.maxIm_A!=null)number(c.maxIm_A,'励磁电流量程',.01,1);}
   return definitions[table].map(k=>{
     let v=b[k];if(k==='published')return v?1:0;if(k==='sort')return Number.isFinite(v)?v:0;
     if(jsonKeys.has(k)&&!(k==='tags'&&table==='questions'))return JSON.stringify(v??(['sim_config','options'].includes(k)?null:[]));

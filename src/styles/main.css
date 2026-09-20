@@ -69,10 +69,12 @@ body {
 }
 
 /* 输入 */
-.input {
-  @apply w-full px-4 py-2.5 rounded-2xl bg-white/80 border border-ink-100 text-sm outline-none transition;
+@layer components {
+  .input {
+    @apply w-full px-4 py-2.5 rounded-2xl bg-white/80 border border-ink-100 text-sm outline-none transition;
+  }
+  .input:focus { border-color: #2ac4aa; box-shadow: 0 0 0 4px rgba(42,196,170,.14); background:#fff; }
 }
-.input:focus { border-color: #2ac4aa; box-shadow: 0 0 0 4px rgba(42,196,170,.14); background:#fff; }
 
 /* 导航项 */
 .nav-item {
@@ -103,10 +105,17 @@ body {
 .page-enter-from { opacity: 0; transform: translateY(14px); }
 
 /* 模态 */
-.modal-mask { position: fixed; inset:0; background: rgba(20,35,50,.4); backdrop-filter: blur(4px); z-index: 80; display:flex; align-items:center; justify-content:center; padding: 20px; }
-.modal { @apply bg-white rounded-3xl shadow-lift w-full max-w-lg max-h-[88vh] overflow-y-auto animate-pop; }
+.modal-mask { position: fixed; inset:0; background: rgba(20,35,50,.55); z-index: 80; display:flex; align-items:center; justify-content:center; padding: 20px; }
+@supports ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
+  .modal-mask { background: rgba(20,35,50,.4); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+}
+.modal { position:relative; z-index:1; @apply bg-white rounded-3xl shadow-lift w-full max-w-lg max-h-[88vh] overflow-y-auto; animation: pop .3s ease both; }
+@media (prefers-reduced-motion: reduce){ .modal { animation: none; } }
 
 /* 骨架/辅助 */
+.skeleton { background: linear-gradient(90deg,#eef2f6 25%,#e3e9ef 37%,#eef2f6 63%); background-size:400% 100%; animation: shimmer 1.4s ease infinite; border-radius: 12px; }
+@keyframes shimmer { 0%{background-position:100% 0} 100%{background-position:0 0} }
+@media (prefers-reduced-motion: reduce){ .skeleton{animation:none} }
 .hover-lift { transition: transform .3s, box-shadow .3s; }
 .hover-lift:hover { transform: translateY(-4px); }
 .divider-soft { height:1px; background: linear-gradient(90deg,transparent,rgba(120,150,170,.3),transparent); }

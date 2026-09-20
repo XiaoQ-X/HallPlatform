@@ -2,8 +2,13 @@
   <div class="space-y-5 max-w-7xl">
     <label class="block max-w-xs">班级<select v-model="classId" @change="load" class="input"><option value="">全部任课班级</option><option v-for="c in classes" :value="c.id">{{c.name}}</option></select></label>
     <div class="flex flex-wrap gap-5 text-sm"><span>待核验实验：{{d.unverified||0}}</span><span>未解决清洗记录：{{d.unresolved||0}}</span></div>
+    <div v-if="loading" class="space-y-5 animate-pulse">
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4"><div v-for="i in 4" :key="i" class="h-28 rounded-3xl bg-white/70"></div></div>
+      <div class="h-72 rounded-3xl bg-white/70"></div>
+      <p class="text-sm text-ink-400 text-center">正在加载看板数据…</p>
+    </div>
     <!-- KPI -->
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+    <div v-if="!loading" class="grid grid-cols-2 lg:grid-cols-4 gap-4">
       <div v-for="k in kpis" :key="k.label" class="card-hover p-5 relative overflow-hidden">
         <div class="w-11 h-11 rounded-2xl flex items-center justify-center" :style="{background:k.bg,color:k.color}"><Icon :name="k.icon"/></div>
         <div class="text-2xl font-bold text-ink-900 mt-3">{{ k.value }}</div>
@@ -12,7 +17,7 @@
     </div>
 
     <!-- 图表 -->
-    <div class="grid lg:grid-cols-3 gap-5">
+    <div v-if="!loading" class="grid lg:grid-cols-3 gap-5">
       <div class="card p-6 lg:col-span-2">
         <h3 class="font-bold text-ink-900 mb-2">近 7 日实验活跃趋势</h3>
         <Chart :option="trendOpt" height="300px"/>
@@ -23,7 +28,7 @@
       </div>
     </div>
 
-    <div class="grid lg:grid-cols-2 gap-5">
+    <div v-if="!loading" class="grid lg:grid-cols-2 gap-5">
       <div class="card p-6">
         <h3 class="font-bold text-ink-900 mb-2">常见异常 / 错误统计</h3>
         <Chart :option="abnOpt" height="320px"/>
@@ -43,7 +48,7 @@
     </div>
 
     <!-- 学生进度 -->
-    <div class="card p-6">
+    <div v-if="!loading" class="card p-6">
       <h3 class="font-bold text-ink-900 mb-3">学生实验进度</h3>
       <div class="overflow-x-auto"><table class="w-full text-sm">
         <thead><tr class="text-xs text-ink-400">
@@ -68,10 +73,15 @@ import { ref, computed, onMounted } from 'vue';
 import Icon from '../../components/Icon.vue';
 import Chart from '../../components/Chart.vue';
 import { api } from '../../api';
+import {abnormalName} from '../../abnormal-codes';
 const d = ref({ resourceCount:{}, abnormalDist:[], dailySessions:[] });
 const students = ref([]);
 const classes=ref([]),classId=ref('');
-async function load(){d.value=await api('/teacher/dashboard?class_id='+classId.value);students.value=await api('/teacher/students?class_id='+classId.value);}
+const loading=ref(true);
+async function load(){loading.value=true;try{
+  d.value=await api('/teacher/dashboard?class_id='+classId.value);
+  students.value=await api('/teacher/students?class_id='+classId.value);
+}finally{loading.value=false;}}
 const kpis = computed(()=>[
   { label:'学生人数', value:d.value.studentCount, icon:'users', bg:'#e6faf5', color:'#078775' },
   { label:'实验会话', value:d.value.sessionCount, icon:'flask', bg:'#eaf2ff', color:'#2563eb' },
@@ -95,7 +105,7 @@ const abnOpt=computed(()=>{
   const rows=d.value.abnormalDist.slice(0,8);
   return { grid:{left:150,right:24,top:10,bottom:30}, tooltip:{},
     xAxis:{type:'value',splitLine:{lineStyle:{color:'#eef2f6'}}},
-    yAxis:{type:'category',data:rows.map(r=>r.code),axisLine:{lineStyle:{color:'#aebccd'}}},
+    yAxis:{type:'category',data:rows.map(r=>abnormalName(r.code)),axisLine:{lineStyle:{color:'#aebccd'}}},
     series:[{type:'bar',data:rows.map(r=>r.count),barWidth:14,
       itemStyle:{borderRadius:[0,8,8,0],
         color:{type:'linear',x:0,y:0,x2:1,y2:0,colorStops:[{offset:0,color:'#fb7185'},{offset:1,color:'#e11d48'}]}}}]};

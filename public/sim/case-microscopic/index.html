@@ -1,29 +1,30 @@
 <!doctype html>
 <html lang="zh-CN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>霍尔效应仿真实验</title>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>微观机理演示</title>
 <style>
-html,body{margin:0;width:100%;height:100%;background:#e6eceb;overflow:hidden;font-family:system-ui,sans-serif}
+html,body{margin:0;width:100%;height:100%;background:#0d1518;overflow:hidden;font-family:system-ui,sans-serif}
 #stage{position:fixed;inset:0}
 #stage canvas{width:100%;height:100%;display:block}
-#loading{position:absolute;inset:0;display:grid;place-content:center;gap:14px;text-align:center;color:#163e38}
-progress{width:260px;accent-color:#13756b}
+#loading{position:absolute;inset:0;display:grid;place-content:center;gap:14px;text-align:center;color:#9fe7d8}
+progress{width:260px;accent-color:#2dd4bf}
 #status{white-space:pre-wrap;max-width:90vw;min-height:1.2em}
 #retrybtn{display:none;margin:4px auto 0;padding:9px 26px;border:0;border-radius:999px;background:linear-gradient(135deg,#14b8a6,#0d9488);color:#fff;font-size:14px;cursor:pointer;box-shadow:0 8px 20px -8px rgba(13,148,136,.7)}
-#fullscreen{position:absolute;right:10px;bottom:10px;width:34px;height:34px;border:1px solid #aebcba;background:white;border-radius:4px;font-size:22px;cursor:pointer}
+#fullscreen{position:absolute;right:10px;bottom:10px;width:34px;height:34px;border:1px solid #3a4a4d;background:#162226;color:#cfe9e2;border-radius:6px;font-size:20px;cursor:pointer;z-index:5}
+#hint{position:absolute;left:10px;top:10px;font-size:11px;color:#8fb3ab;background:rgba(13,21,24,.55);padding:6px 10px;border-radius:8px;max-width:60vw;line-height:1.6}
 </style></head>
 <body>
-<style>@media(max-width:700px) and (orientation:portrait){#stage canvas{height:62.5vw;position:absolute;top:50%;transform:translateY(-50%)}}</style>
 <div id="stage">
-  <canvas id="unity-canvas" tabindex="0" aria-label="霍尔效应三维实验台"></canvas>
+  <canvas id="unity-canvas" tabindex="0" aria-label="霍尔效应微观机理演示"></canvas>
+  <div id="hint">拖动旋转视角 · 滚轮/双指缩放 · 单指拖动平移</div>
   <div id="loading">
-    <strong>霍尔效应仿真实验</strong>
+    <strong>微观机理演示</strong>
     <progress id="progress" max="1" value="0"></progress>
-    <span id="status">正在加载实验</span>
+    <span id="status">正在加载微观实验</span>
     <button id="retrybtn">重新加载</button>
   </div>
   <button id="fullscreen" title="全屏" aria-label="全屏">⛶</button>
 </div>
-<script src="hall-host.js"></script>
+<script src="../hall-host.js"></script>
 <script>
 const canvas=document.getElementById('unity-canvas');
 const loadingEl=document.getElementById('loading');
@@ -49,16 +50,16 @@ function loadUnity(){
   if(loaderEl){loaderEl.remove();loaderEl=null;}
   retryBtn.style.display='none';
   progressEl.value=0;
-  setStatus('正在加载实验');
+  setStatus('正在加载微观实验');
   loaderEl=document.createElement('script');
-  loaderEl.src='Build/WebGL.loader.js?v=20260920c';
+  loaderEl.src='Build/BuildWebGL.loader.js?v=20260920p';
   loaderEl.onerror=()=>handleFail('实验加载脚本下载失败，可能是网络中断。');
   loaderEl.onload=()=>{
     createUnityInstance(canvas,{
-      dataUrl:'Build/WebGL.data.unityweb?v=20260920d',
-      frameworkUrl:'Build/WebGL.framework.js.unityweb?v=20260920d',
-      codeUrl:'Build/WebGL.wasm.unityweb?v=20260920d',
-      streamingAssetsUrl:'StreamingAssets',companyName:'Hall Effect Lab',productName:'Hall Experiment',productVersion:'2.3.0-web.1',
+      dataUrl:'Build/BuildWebGL.data.unityweb?v=20260920p',
+      frameworkUrl:'Build/BuildWebGL.framework.js.unityweb?v=20260920p',
+      codeUrl:'Build/BuildWebGL.wasm.unityweb?v=20260920p',
+      streamingAssetsUrl:'StreamingAssets',companyName:'Hall Effect Lab',productName:'Microscopic Lab',productVersion:'1.0.0-web.1',
       matchWebGLToCanvasSize:true,devicePixelRatio:Math.min(window.devicePixelRatio||1,2)
     },p=>{progressEl.value=p;}).then(instance=>{
       window.unityInstance=instance;window.HallHost.attach(instance);
@@ -72,10 +73,10 @@ function loadUnity(){
 function handleFail(zh){
   attempt++;
   if(attempt<=MAX_AUTO){
-    setStatus(zh+' 正在自动重试（'+attempt+'/'+MAX_AUTO+'）…','#9a6a1a');
+    setStatus(zh+' 正在自动重试（'+attempt+'/'+MAX_AUTO+'）…','#e6b450');
     waitTimer=setTimeout(loadUnity,700*attempt);
   }else{
-    setStatus(zh+' 已自动重试 '+MAX_AUTO+' 次仍失败，请检查网络后手动重试。','#9b2424');
+    setStatus(zh+' 已自动重试 '+MAX_AUTO+' 次仍失败，请检查网络后手动重试。','#ef6a6a');
     retryBtn.style.display='inline-block';
   }
 }

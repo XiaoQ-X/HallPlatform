@@ -11,10 +11,12 @@ const routes = [
     children: [
       { path: '', component: () => import('../views/student/Home.vue') },
       { path: 'sim/lab', component: () => import('../views/student/SimLab.vue') },
+      { path: 'sim/side-effects', component: () => import('../views/student/SideEffects.vue') },
       { path: 'resources/cases', component: () => import('../views/student/Cases.vue') },
       { path: 'resources/ideology', component: () => import('../views/student/Ideology.vue') },
       { path: 'resources/quiz', component: () => import('../views/student/Quiz.vue') },
       { path: 'resources/projects', component: () => import('../views/student/Projects.vue') },
+      { path: 'resources/downloads', component: () => import('../views/student/Downloads.vue') },
       { path: 'workshop/cleaning', component: () => import('../views/student/Cleaning.vue') },
       { path: 'workshop/uncertainty', component: () => import('../views/student/Uncertainty.vue') },
       { path: 'workshop/analysis', component: () => import('../views/student/Analysis.vue') },
@@ -36,6 +38,8 @@ const routes = [
       { path: 'appeals', component: () => import('../views/teacher/Appeals.vue') }
       ,{path:'review',component:()=>import('../views/teacher/Review.vue')}
       ,{path:'rubrics',component:()=>import('../views/teacher/Rubrics.vue')}
+      ,{path:'side-effects',component:()=>import('../views/teacher/SideEffectMonitor.vue')}
+      ,{path:'side-effects/:studentId',component:()=>import('../views/teacher/SideEffectDetail.vue')}
     ]
   },{path:'/:pathMatch(.*)*',redirect:'/'}
 ];

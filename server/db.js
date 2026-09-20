@@ -91,6 +91,16 @@ CREATE TABLE IF NOT EXISTS sim_abnormals (
   success INTEGER, step INTEGER, payload TEXT,
   occurred_at TEXT DEFAULT (datetime('now','localtime'))
 );
+CREATE TABLE IF NOT EXISTS side_effect_records (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_id INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  params_json TEXT NOT NULL,
+  readings_json TEXT NOT NULL DEFAULT '[]',
+  result_json TEXT NOT NULL DEFAULT '{}',
+  conclusion TEXT,
+  created_at TEXT DEFAULT (datetime('now','localtime'))
+);
 CREATE TABLE IF NOT EXISTS cleaning_records (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   student_id INTEGER, session_id INTEGER,
@@ -149,6 +159,24 @@ CREATE TABLE IF NOT EXISTS grade_overrides (
   score REAL, max_score REAL,
   created_at TEXT DEFAULT (datetime('now','localtime'))
 );
+CREATE TABLE IF NOT EXISTS side_effect_grades (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_id INTEGER NOT NULL,
+  record_id INTEGER,
+  session_id INTEGER,
+  dim_params REAL,
+  dim_steps REAL,
+  dim_v0 REAL,
+  dim_ve REAL,
+  dim_reversal REAL,
+  dim_explain REAL,
+  total REAL,
+  comment TEXT,
+  auto INTEGER NOT NULL DEFAULT 0,
+  teacher_id INTEGER NOT NULL,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT
+);
 `);
 
 // 统一兜底：位置参数中的 undefined 无法被 node:sqlite 绑定，自动转 null
@@ -157,6 +185,13 @@ const _run = _Statement.prototype.run;
 _Statement.prototype.run = function (...args) {
   return _run.call(this, ...args.map(a => (a === undefined ? null : a)));
 };
+
+// 幂等补列：兼容在 conclusion 字段加入前已创建的旧库（新库由 CREATE TABLE 直接包含）
+function ensureColumn(table, column, ddl) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (!cols.some(c => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+}
+ensureColumn('side_effect_records', 'conclusion', 'conclusion TEXT');
 
 module.exports = db;
 require('./migrate')(db, dataDir);

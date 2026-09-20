@@ -28,10 +28,10 @@
         <h3 class="text-2xl font-bold text-ink-900">{{ mode==='login'?'欢迎回来':'创建账号' }}</h3>
         <p class="text-ink-400 text-sm mt-1 mb-7">{{ mode==='login'?'登录后开启你的实验学习':'注册后加入课程班级' }}</p>
 
-        <div class="space-y-4">
+        <form class="space-y-4" @submit.prevent="submit">
           <div>
             <label class="text-sm text-ink-600 mb-1.5 block">账号</label>
-            <input v-model="form.username" class="input" placeholder="请输入账号" />
+            <input v-model="form.username" class="input" placeholder="请输入账号" autocomplete="username" />
           </div>
           <div v-if="mode==='register'">
             <label class="text-sm text-ink-600 mb-1.5 block">姓名</label>
@@ -51,9 +51,9 @@
           </div>
           <div>
             <label class="text-sm text-ink-600 mb-1.5 block">密码</label>
-            <input v-model="form.password" type="password" class="input" placeholder="请输入密码" @keyup.enter="submit" />
+            <input v-model="form.password" type="password" class="input" placeholder="请输入密码" autocomplete="current-password" />
           </div>
-        </div>
+        </form>
 
         <div v-if="error" class="mt-4 text-sm text-rose-500 bg-rose-50 rounded-2xl px-4 py-2.5">{{ error }}</div>
 
@@ -78,7 +78,7 @@
 import { reactive, ref, onMounted } from 'vue';
 import Icon from '../components/Icon.vue';
 import { useAuth } from '../stores/auth';
-import { api } from '../api';
+import { api, setToken } from '../api';
 const auth = useAuth();
 const mode = ref('login');
 const form = reactive({ username:'', password:'', name:'', class_id:null, student_no:'' });
@@ -88,14 +88,16 @@ async function submit() {
   error.value = '';
   try {
     if (mode.value === 'login') {
-      await auth.login(form.username, form.password);
-    } else {
-      if (!form.name) throw new Error('请填写真实姓名');
-      const r = await api('/auth/register', { method:'POST', body:{ ...form } });
-      auth.token = r.token; localStorage.setItem('hall_token', r.token);
+      // 登录响应已含 role；成功即整页跳转，不再依赖额外的 /me 请求，避免弱网下卡住
+      const r = await api('/auth/login', { method: 'POST', body: { username: form.username, password: form.password } });
+      setToken(r.token);
+      location.replace(r.role === 'teacher' ? '/teacher' : '/');
+      return;
     }
-    const me = await auth.fetchMe();
-    location.href = auth.isTeacher ? '/teacher' : '/';
+    if (!form.name) throw new Error('请填写真实姓名');
+    const reg = await api('/auth/register', { method: 'POST', body: { ...form } });
+    setToken(reg.token);
+    location.replace('/');
   } catch (e) { error.value = e.message; }
 }
 </script>

@@ -7,7 +7,10 @@
     </div>
 
     <div class="card p-6 overflow-x-auto">
-      <table class="w-full text-sm min-w-700">
+      <div v-if="loading" class="space-y-3 py-1">
+        <div v-for="i in 8" :key="i" class="skeleton h-7" :style="{width:55+(i%4)*11+'%'}"></div>
+      </div>
+      <table v-else class="w-full text-sm min-w-700">
         <thead><tr class="text-xs text-ink-400">
           <th class="text-left py-2 font-medium">账号</th><th class="text-left font-medium">姓名</th>
           <th class="font-medium">学号</th><th class="font-medium">班级</th>
@@ -71,14 +74,14 @@
 import { ref, onMounted } from 'vue';
 import Icon from '../../components/Icon.vue';
 import { api } from '../../api';
-const students = ref([]), classes = ref([]);
+const students = ref([]), classes = ref([]), loading=ref(true);
 const form = ref(null), showClass = ref(false);
 const cls = ref({ name:'', code:'' });
-async function load(){
+async function load(){loading.value=true;try{
   students.value = await api('/teacher/students');
   classes.value = await api('/auth/classes');
-}
-function newStudent(){ form.value = { username:'', password:'', name:'', student_no:'', class_id:classes.value[0]?.id, avatar:'🧑‍🎓' }; }
+}finally{loading.value=false;}}
+function newStudent(){ form.value = { username:'', password:'', name:'', student_no:'', class_id:classes.value[0]?.id, avatar:'🧑' }; }
 function edit(s){ form.value = { ...s }; }
 async function save(){
   if(!form.value.class_id)return alert('请先创建并选择班级');

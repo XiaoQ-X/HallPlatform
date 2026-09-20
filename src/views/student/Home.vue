@@ -48,6 +48,8 @@
           <router-link to="/workshop/cleaning" class="ml-auto text-sm text-brand-600">数据清洗台 →</router-link>
         </div>
         <div class="space-y-3">
+          <template v-if="loading"><div v-for="i in 3" :key="i" class="skeleton h-[60px]"></div></template>
+          <template v-else>
           <div v-for="s in sessions.slice(0,4)" :key="s.id" class="flex items-center gap-4 p-3 rounded-2xl hover:bg-ink-50">
             <div :class="['w-10 h-10 rounded-2xl flex items-center justify-center', s.finished?'bg-brand-50 text-brand-600':'bg-amber-50 text-amber-600']">
               <Icon :name="s.finished?'check':'clock'"/>
@@ -59,16 +61,20 @@
             <span :class="['ml-auto chip-gray', s.finished?'!bg-brand-50 !text-brand-700':'']">{{ s.finished?'已完成':'进行中' }}</span>
           </div>
           <div v-if="!sessions.length" class="text-center text-sm text-ink-400 py-8">还没有实验记录，点击上方按钮开始吧</div>
+          </template>
         </div>
       </div>
 
       <div class="card p-6">
         <h3 class="font-bold text-ink-900 mb-4">推荐阅读</h3>
         <div class="space-y-3">
+          <template v-if="loading"><div v-for="i in 3" :key="i" class="skeleton h-12"></div></template>
+          <template v-else>
           <router-link v-for="c in recCases" :key="c.id" :to="'/resources/cases'" class="flex items-center gap-3 group">
             <div class="w-10 h-10 rounded-2xl flex items-center justify-center text-white text-lg" :style="{background:c.color}">{{ c.cover }}</div>
             <div class="text-sm font-medium text-ink-700 group-hover:text-brand-700 leading-5">{{ c.title }}</div>
           </router-link>
+          </template>
         </div>
       </div>
     </div>
@@ -81,7 +87,7 @@ import Icon from '../../components/Icon.vue';
 import { useAuth } from '../../stores/auth';
 import { api } from '../../api';
 const auth = useAuth();
-const sessions = ref([]), recCases = ref([]);
+const sessions = ref([]), recCases = ref([]), loading=ref(true);
 const greet = computed(()=>{const h=new Date().getHours();return h<11?'早上好':h<14?'中午好':h<18?'下午好':'晚上好';});
 
 const stats = ref([
@@ -97,6 +103,7 @@ const quick = [
 ];
 
 onMounted(async ()=>{
+ try{
   sessions.value = await api('/sim/sessions');
   const brief = await api('/workshop/sessions-brief');
   const attempts = await api('/resources/attempts');
@@ -107,5 +114,6 @@ onMounted(async ()=>{
   stats.value[1].value = attempts.length ? Math.round(Math.max(...attempts.map(a=>a.score*100/a.total))) : '—';
   stats.value[2].value = mySubs.length;
   stats.value[3].value = brief.reduce((a,b)=>a+b.errors,0);
+ }finally{loading.value=false;}
 });
 </script>

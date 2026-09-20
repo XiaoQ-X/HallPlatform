@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>副效应与误差修正（占位案例）</title>
+<style>
+  :root{--brand:#0d9488;--brand2:#078775;--ink:#26334a;--mut:#7e92ab;--line:#e9edf3;--bg:#eef3f7}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;min-height:100%;background:var(--bg);color:var(--ink);font-family:'Noto Sans SC',system-ui,sans-serif}
+  #app{max-width:1100px;margin:0 auto;padding:14px}
+  header.p{background:#fff;border:1px solid #fff;border-radius:22px;padding:16px 18px;box-shadow:0 4px 20px -6px rgba(15,60,80,.12);margin-bottom:14px}
+  .t{font-size:17px;font-weight:800;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .badge{font-size:11px;font-weight:600;color:#9b6b12;background:#fef3c7;border-radius:999px;padding:3px 10px}
+  .webgl{font-size:11px;color:#9b2424;background:#fee2e2;border-radius:999px;padding:3px 10px;display:none}
+  .sub{font-size:12px;color:var(--mut);margin-top:6px;line-height:1.7}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .panel{background:#fff;border:1px solid #fff;border-radius:22px;padding:16px 18px;box-shadow:0 4px 20px -6px rgba(15,60,80,.12)}
+  .panel h3{font-size:14px;margin:4px 0 12px;display:flex;align-items:center;gap:7px}
+  .panel h3::before{content:'';width:5px;height:15px;border-radius:3px;background:linear-gradient(var(--brand),var(--brand2))}
+  .row{margin:11px 0}
+  .row .lab{display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px}
+  .row .lab b{color:var(--brand2)}
+  input[type=range]{width:100%;accent-color:var(--brand)}
+  .dir{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px}
+  .dir .cap{font-size:12px;color:var(--mut);grid-column:1/3}
+  button{cursor:pointer;font-family:inherit}
+  .b{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:0;border-radius:999px;padding:9px 14px;font-size:13px;font-weight:600;transition:.15s}
+  .b:active{transform:translateY(1px)}
+  .b-p{color:#fff;background:linear-gradient(135deg,#14b8a6,#0d9488 55%,#0891b2);box-shadow:0 8px 18px -9px rgba(13,148,136,.7)}
+  .b-s{background:#effcf9;color:#078775}
+  .b-g{background:#f5f7fa;color:#485a74;border:1px solid var(--line)}
+  .sel{outline:3px solid rgba(13,148,136,.35)}
+  .ops{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+  .read{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center}
+  .read .c{border-radius:14px;padding:9px 4px;background:#f5f7fa}
+  .read .c .k{font-size:10px;color:var(--mut)}
+  .read .c .v{font-size:15px;font-weight:800;margin-top:3px}
+  .quad{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:8px 0}
+  .quad .q{border:1px solid var(--line);border-radius:13px;padding:8px;text-align:center;font-size:12px;color:var(--mut)}
+  .quad .q b{display:block;font-size:14px;color:var(--ink);margin-top:3px}
+  .quad .q.on{border-color:#94ecda;background:#effcf9}
+  .corr{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;margin-top:6px}
+  .corr .c{border-radius:14px;padding:9px 4px}
+  .corr .c .k{font-size:10px;color:var(--mut)}
+  .corr .c .v{font-size:14px;font-weight:800;margin-top:3px}
+  .err{background:#fee2e2;color:#9b2424;border-radius:14px;padding:10px 13px;font-size:13px;margin-top:12px;white-space:pre-wrap}
+  details{margin-top:14px;background:#fff;border-radius:18px;padding:10px 14px;border:1px solid var(--line);font-size:12px;color:var(--mut)}
+  details ul{margin:8px 0;padding-left:18px;max-height:170px;overflow:auto}
+  details li{margin:3px 0}
+  .note{font-size:11px;color:var(--mut);margin-top:8px;line-height:1.6}
+  @media(max-width:760px){.grid{grid-template-columns:1fr}.read,.quad{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="p">
+    <div class="t">副效应与误差修正
+      <span class="badge">占位案例 · Unity Build 待接入</span>
+      <span id="webglWarn" class="webgl">当前浏览器可能不支持 WebGL</span>
+    </div>
+    <div class="sub" id="statusLine">正在初始化通信…</div>
+  </header>
+
+  <div class="grid">
+    <!-- 左：参数与操作 -->
+    <section class="panel">
+      <h3>实验参数（可调）</h3>
+      <div class="row">
+        <div class="lab"><span>工作电流 IS</span><b id="vIS">5.0 mA</b></div>
+        <input id="IS" type="range" min="0" max="10" step="0.1" value="5" aria-label="工作电流">
+      </div>
+      <div class="row">
+        <div class="lab"><span>励磁电流 IM（决定 B）</span><b id="vIM">0.80 A</b></div>
+        <input id="IM" type="range" min="0" max="1" step="0.02" value="0.8" aria-label="励磁电流">
+      </div>
+      <div class="row">
+        <div class="lab"><span>电极偏移（不等位电阻 r0）</span><b id="vr0">0.050 Ω</b></div>
+        <input id="r0" type="range" min="0" max="0.5" step="0.005" value="0.05" aria-label="电极偏移">
+      </div>
+      <div class="row">
+        <div class="lab"><span>厄廷豪森系数 kE（温差）</span><b id="vkE">0.0050</b></div>
+        <input id="kE" type="range" min="0" max="0.02" step="0.0005" value="0.005" aria-label="厄廷豪森系数">
+      </div>
+
+      <h3 style="margin-top:16px">测量方向切换</h3>
+      <div class="dir">
+        <div class="cap">电流方向</div>
+        <button class="b b-s sel" id="sIp" onclick="setDir('sI',1)">+ I</button>
+        <button class="b b-s" id="sIn" onclick="setDir('sI',-1)">− I</button>
+        <div class="cap" style="margin-top:6px">磁场方向</div>
+        <button class="b b-s sel" id="sBp" onclick="setDir('sB',1)">+ B</button>
+        <button class="b b-s" id="sBn" onclick="setDir('sB',-1)">− B</button>
+      </div>
+
+      <h3 style="margin-top:16px">测量操作</h3>
+      <div class="ops">
+        <button class="b b-p" onclick="togglePower()" id="powerBtn">开机</button>
+        <button class="b b-s" onclick="recordCurrent()">记录此方向</button>
+        <button class="b b-g" onclick="autoFour()">四方向对称测量</button>
+        <button class="b b-g" onclick="resetAll()">清空重测</button>
+        <button class="b b-p" onclick="finishExp()">结束并保存</button>
+      </div>
+      <div class="note">未通电时“记录”会被拒绝（与真实仪器一致）；“四方向对称测量”需先开机。</div>
+    </section>
+
+    <!-- 右：实时读数与修正 -->
+    <section class="panel">
+      <h3>实时读数（mV）</h3>
+      <div class="read">
+        <div class="c"><div class="k">理想 VH</div><div class="v" id="rVH" style="color:#0d9488">—</div></div>
+        <div class="c"><div class="k">不等位 V0</div><div class="v" id="rV0" style="color:#d97706">—</div></div>
+        <div class="c"><div class="k">厄廷豪森 VE</div><div class="v" id="rVE" style="color:#e11d48">—</div></div>
+        <div class="c"><div class="k">实测 Vmeasured</div><div class="v" id="rT" style="color:#0284c7">—</div></div>
+      </div>
+
+      <h3 style="margin-top:16px">四方向读数</h3>
+      <div class="quad">
+        <div class="q" id="qV1">V1 (+，+)<b>—</b></div>
+        <div class="q" id="qV2">V2 (+，−)<b>—</b></div>
+        <div class="q" id="qV3">V3 (−，−)<b>—</b></div>
+        <div class="q" id="qV4">V4 (−，+)<b>—</b></div>
+      </div>
+
+      <h3 style="margin-top:14px">误差修正结果</h3>
+      <div class="corr">
+        <div class="c" style="background:#fff1f2"><div class="k">修正值 VH+VE</div><div class="v" id="cCorr" style="color:#e11d48">—</div></div>
+        <div class="c" style="background:#fffbeb"><div class="k">残留 VE</div><div class="v" id="cVE" style="color:#d97706">—</div></div>
+        <div class="c" style="background:#ecfdf5"><div class="k">理想 VH</div><div class="v" id="cIdeal" style="color:#0d9488">—</div></div>
+      </div>
+      <div class="note">对称法消除 V0；VE 与 VH 换向规律相同而残留，已知 kE 时减去 VE 得理想 VH。</div>
+    </section>
+  </div>
+
+  <div id="errorBox" class="err" style="display:none"></div>
+
+  <details open>
+    <summary>关键操作记录（随实验事件回传平台）</summary>
+    <ul id="opLog"><li>暂无操作</li></ul>
+  </details>
+</div>
+
+<script src="../hall-host.js"></script>
+<script>
+/* ===== 占位模拟设备：实现与真实 Unity WebBridge 相同的消息契约 =====
+   真实 Build 就绪后，本面板替换为 Unity 实例，hall-host 与事件格式不变。 */
+const dmm = 0.0005;                 // 样品厚度 0.5 mm（m）
+const RH = -2.7e-4;                  // 霍尔系数 m³/C（参考示例，非标定）
+let IS=5, IM=0.8, r0=0.05, kE=0.005; // 滑块参数
+let sI=1, sB=1;                      // 方向
+let powered=false, finished=false, groups=0, sessionId='', seq=0, started=0;
+let slotValues={1:null,2:null,3:null,4:null}, currentGid='G1';
+let opList=[];
+const Bof=()=>0.5*IM;               // 占位线性磁场 B=0.5·IM（T）
+
+function guid(){return (crypto.randomUUID?crypto.randomUUID():'id-'+Date.now()+'-'+Math.random().toString(16).slice(2)).replace(/-/g,'');}
+function newSession(){sessionId=guid();seq=0;started=Date.now();finished=false;groups=0;slotValues={1:null,2:null,3:null,4:null};currentGid='G1';opList=[];}
+function addOp(t){opList.push({time:new Date().toLocaleTimeString(),text:t});}
+function readingAt(si,sb){
+  const sIS=IS*si, sB_=Bof()*sb;
+  const VH=RH*sIS*sB_/dmm;
+  const V0=r0*sIS;
+  const VE=kE*sIS*sB_;
+  return {VH,V0,VE,total:VH+V0+VE};
+}
+function stateSnapshot(extra){
+  const r=readingAt(sI,sB);
+  return Object.assign({powered,circuitValid:true,stable:true,finished,
+    pendingDirections:Object.values(slotValues).filter(v=>v===null&&false).length,completeGroups:groups,
+    IS_mA:IS*sI,IM_A:IM*sB,B_T:Bof()*sB,rawVoltage_mV:powered?r.total:0,
+    VH_mV:r.VH,V0_mV:r.V0,VE_mV:r.VE},extra||{});
+}
+function emit(type,code,detail,success,extra,topLevel){
+  const e={schemaVersion:1,step:1,type,
+    eventId:sessionId+':'+(++seq),sessionId,caseId:'case-side-effects',
+    timestamp:new Date().toISOString(),elapsedMs:Date.now()-started,
+    code:code||'',detail:detail||'',success:!!success,isDemo:false,
+    maxIs_mA:10,maxIm_A:1,state:stateSnapshot(extra)};
+  // measurement 等需被后端在事件顶层读取的字段，通过 topLevel 展开；report 仍在 state.report
+  if(topLevel)Object.assign(e,topLevel);
+  window.dispatchEvent(new CustomEvent('hall-event',{detail:e}));
+  return e;
+}
+const slotOf=(si,sb)=>({ '1,1':1,'1,-1':2,'-1,-1':3,'-1,1':4 }[si+','+sb]);
+
+function showError(m){const b=document.getElementById('errorBox');b.textContent=m;b.style.display='block';}
+function clearError(){document.getElementById('errorBox').style.display='none';}
+
+/* 平台 → 设备 命令（mock instance） */
+const mockInstance={SendMessage(go,method,json){
+  let p={};try{p=json?JSON.parse(json):{}}catch(e){}
+  setTimeout(()=>handle(method,p),0);
+}};
+function handle(method,p){
+  switch(method){
+    case 'InitExperiment':
+      if(p.schemaVersion!==1||p.material!=='n-silicon'||p.thickness_mm!==0.5||
+         p.maxIs_mA>10||p.maxIm_A>1){emit('OnAbnormalEvent','INVALID_INIT','配置不受支持',false);return;}
+      newSession();powered=false;
+      emit('OnCommandResult','InitExperiment','',true);
+      addOp('初始化实验（'+(p.caseId||'case-side-effects')+'）');render();
+      break;
+    case 'SetParameter':
+      if(p.name==='IS_mA')IS=clamp(p.value,0,10);
+      else if(p.name==='IM_A')IM=clamp(p.value,0,1);
+      else if(p.name==='r0')r0=clamp(p.value,0,.5);
+      else if(p.name==='kE')kE=clamp(p.value,0,.02);
+      else if(p.name==='power'){powered=p.value===1;}
+      emit('OnCommandResult','SetParameter',JSON.stringify(p),true);
+      addOp('参数调整 '+p.name+'='+p.value);render();
+      break;
+    case 'RecordMeasurement': recordCurrent(); break;
+    case 'RequestSnapshot': emit('OnSnapshot','snapshot','',true); break;
+    case 'ResetExperiment': resetAll(true); break;
+    case 'FinishFromWeb': finishExp(); break;
+  }
+}
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+
+/* 设备本地 UI 操作 */
+function togglePower(){
+  powered=!powered;addOp(powered?'开机通电':'关机断电');
+  emit('OnCommandResult','SetParameter',JSON.stringify({name:'power',value:powered?1:0}),true);render();
+}
+function setDir(which,v){
+  if(which==='sI')sI=v; else sB=v;
+  addOp('切换'+(which==='sI'?'电流':'磁场')+'方向 '+(v>0?'+':'−'));render();
+}
+function recordCurrent(){
+  if(finished){showError('实验已结束，请清空重测');return;}
+  if(!powered){showError('请先开机通电，再记录读数');emit('OnAbnormalEvent','CIRCUIT_NOT_READY','未通电',false);return;}
+  clearError();
+  const slot=slotOf(sI,sB), r=readingAt(sI,sB);
+  const wasFilled=slotValues[slot]!==null;
+  slotValues[slot]=r.total;
+  const filled=Object.values(slotValues).filter(v=>v!==null).length;
+  const groupComplete=filled===4;
+  const measurement={groupId:currentGid,timestamp:new Date().toISOString(),slot,
+    isDirection:sI,imDirection:sB,voltageDirection:1,
+    IS_mA:IS*sI,IM_A:IM*sB,isSetpoint_mA:IS,imSetpoint_A:IM,B_T:Bof()*sB,
+    rawVoltage_mV:r.total,VH_mV:r.VH,normalizedVH_mV:r.VH,V0_mV:r.V0,VE_mV:r.VE,
+    groupComplete,row:null};
+  emit('OnMeasureData','record','',true,null,{measurement});
+  addOp((wasFilled?'更新':'记录')+' 槽位'+slot+' = '+r.total.toFixed(3)+' mV');
+  if(groupComplete){groups++;computeCorrection();}
+  render();
+}
+function autoFour(){
+  if(finished){showError('实验已结束，请清空重测');return;}
+  if(!powered){showError('请先开机，再执行四方向对称测量');emit('OnAbnormalEvent','CIRCUIT_NOT_READY','未通电',false);return;}
+  clearError();
+  const quad=[[1,1],[1,-1],[-1,-1],[-1,1]];
+  quad.forEach((q,i)=>{
+    const si=q[0],sb=q[1],slot=i+1,r=readingAt(si,sb);
+    slotValues[slot]=r.total;
+    const measurement={groupId:currentGid,timestamp:new Date().toISOString(),slot,
+      isDirection:si,imDirection:sb,voltageDirection:1,
+      IS_mA:IS*si,IM_A:IM*sb,isSetpoint_mA:IS,imSetpoint_A:IM,B_T:Bof()*sb,
+      rawVoltage_mV:r.total,VH_mV:r.VH,normalizedVH_mV:r.VH,V0_mV:r.V0,VE_mV:r.VE,
+      groupComplete:slot===4,row:null};
+    emit('OnMeasureData','record','',true,null,{measurement});
+  });
+  groups++;addOp('四方向对称测量完成');computeCorrection();render();
+}
+function computeCorrection(){
+  const V=[slotValues[1],slotValues[2],slotValues[3],slotValues[4]];
+  window._corr=(V[0]-V[1]+V[2]-V[3])/4;
+  window._VEref=readingAt(1,1).VE;
+  window._ideal=window._corr-window._VEref;
+}
+function resetAll(fromHost){
+  newSession();powered=false;finished=false;
+  clearError();
+  if(!fromHost)emit('OnStepState','reset','',true);
+  addOp('清空并重置实验');
+  window._corr=window._VEref=window._ideal=null;render();
+}
+function finishExp(){
+  if(groups<1){showError('至少完成一组四方向测量才能结束');emit('OnAbnormalEvent','EXPERIMENT_INCOMPLETE','未完成四方向',false);return;}
+  powered=false;finished=true;
+  const V=slotValues;
+  const report={module:'side-effects',completedAt:new Date().toISOString(),
+    params:{IS_mA:IS,IM_A:IM,B_T:Bof(),RH,d_mm:0.5,r0,kE},
+    forwardReadings:{V1:V[1],V3:V[3]},reverseReadings:{V2:V[2],V4:V[4]},
+    readings:{V1:V[1],V2:V[2],V3:V[3],V4:V[4]},
+    beforeCorrection_mV:V[1],correctedHall_mV:window._corr,
+    residualVE_mV:window._VEref,afterCorrection_mV:window._ideal,
+    operations:opList.slice()};
+  emit('OnExperimentComplete','finish','',true,{report});
+  addOp('结束实验并保存完整记录');render();
+}
+
+/* 渲染 */
+const f3=x=>Number(x).toFixed(3), f4=x=>Number(x).toFixed(4);
+function render(){
+  document.getElementById('vIS').textContent=IS.toFixed(1)+' mA';
+  document.getElementById('vIM').textContent=IM.toFixed(2)+' A';
+  document.getElementById('vr0').textContent=r0.toFixed(3)+' Ω';
+  document.getElementById('vkE').textContent=kE.toFixed(4);
+  ['sIp','sIn','sBp','sBn'].forEach(id=>document.getElementById(id).classList.remove('sel'));
+  if(sI===1)document.getElementById('sIp').classList.add('sel');else document.getElementById('sIn').classList.add('sel');
+  if(sB===1)document.getElementById('sBp').classList.add('sel');else document.getElementById('sBn').classList.add('sel');
+  document.getElementById('powerBtn').textContent=powered?'关机':'开机';
+  const r=readingAt(sI,sB);
+  document.getElementById('rVH').textContent=f3(r.VH);
+  document.getElementById('rV0').textContent=f3(r.V0);
+  document.getElementById('rVE').textContent=f3(r.VE);
+  document.getElementById('rT').textContent=f3(r.total);
+  ['V1','V2','V3','V4'].forEach((k,i)=>{
+    const q=document.getElementById('q'+k),v=slotValues[i+1];
+    q.querySelector('b').textContent=v===null?'—':f3(v);
+    q.classList.toggle('on',v!==null);
+  });
+  document.getElementById('cCorr').textContent=window._corr==null?'—':f3(window._corr);
+  document.getElementById('cVE').textContent=window._VEref==null?'—':f3(window._VEref);
+  document.getElementById('cIdeal').textContent=window._ideal==null?'—':f3(window._ideal);
+  document.getElementById('statusLine').textContent=
+    (finished?'实验已结束并保存':(powered?'已通电，可记录读数':'未通电（可先调参数观察）'))+' · 完整组 '+groups+'/4';
+  const ul=document.getElementById('opLog');
+  ul.innerHTML=opList.length?'':'<li>暂无操作</li>';
+  if(opList.length)ul.innerHTML=opList.slice(-40).map(o=>'<li>'+o.time+' · '+o.text+'</li>').join('');
+}
+
+/* WebGL 能力检测（真实三维需要；占位面板不依赖） */
+function detectWebGL(){
+  try{
+    const c=document.createElement('canvas');
+    const ok=!!(window.WebGLRenderingContext&&(c.getContext('webgl2')||c.getContext('webgl')));
+    if(!ok)document.getElementById('webglWarn').style.display='inline-block';
+  }catch(e){document.getElementById('webglWarn').style.display='inline-block';}
+}
+
+/* 启动：attach 模拟实例，再由“设备”发 OnReady（与真实 WebBridge.Start 一致） */
+newSession();
+window.HallHost.attach(mockInstance);
+detectWebGL();
+emit('OnReady','ready','',true);
+render();
+</script>
+</body>
+</html>

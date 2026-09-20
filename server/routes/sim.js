@@ -3,7 +3,9 @@ function own(req,key){const s=db.prepare('SELECT * FROM sim_sessions WHERE id=?'
 r.post('/start',(req,res)=>{
   const caseId=req.body.case_id||'hall-basic';text(caseId,'案例编号',100);
   let cfg={material:'n-silicon',thickness_mm:.5,maxIs_mA:10,maxIm_A:1};
-  if(caseId!=='hall-basic'){const owner=req.user.role==='teacher'?req.user.id:db.prepare('SELECT teacher_id FROM classes WHERE id=?').get(req.user.class_id)?.teacher_id;const c=db.prepare('SELECT sim_config FROM cases WHERE id=? AND published=1 AND archived=0 AND owner_id=?').get(id(caseId.replace(/^case-/,'')),owner||0);if(!c)fail('案例不可用');cfg={...cfg,...parse(c.sim_config)};}
+  const builtin={'hall-basic':{module:'hall-basic'},'case-side-effects':{module:'side-effects'},'case-microscopic':{module:'microscopic'}};
+  if(builtin[caseId]){cfg={...cfg,...builtin[caseId]};}
+  else {const owner=req.user.role==='teacher'?req.user.id:db.prepare('SELECT teacher_id FROM classes WHERE id=?').get(req.user.class_id)?.teacher_id;const c=db.prepare('SELECT sim_config FROM cases WHERE id=? AND published=1 AND archived=0 AND owner_id=?').get(id(caseId.replace(/^case-/,'')),owner||0);if(!c)fail('案例不可用');cfg={...cfg,...parse(c.sim_config)};}
   if(cfg.material!=='n-silicon'||cfg.thickness_mm!==.5||cfg.maxIs_mA>10||cfg.maxIm_A>1)fail('案例配置不受引擎支持');
   const result=db.prepare('INSERT INTO sim_sessions(student_id,case_id,config,state) VALUES(?,?,?,?)').run(req.user.id,caseId,JSON.stringify(cfg),'{}');res.json({platformSessionId:result.lastInsertRowid,config:cfg});
 });
@@ -30,7 +32,7 @@ r.post('/events',(req,res)=>{
       }
       if(ev.type==='OnAbnormalEvent')db.prepare('INSERT INTO sim_abnormals(session_id,code,detail,success,step,payload,event_id) VALUES(?,?,?,?,?,?,?)').run(s.id,text(ev.code,'异常代码',100),String(ev.detail||'').slice(0,2000),ev.success?1:0,Number.isInteger(ev.step)?ev.step:null,JSON.stringify(ev),ev.eventId);
       if(ev.type==='OnExperimentComplete'){
-        if(!db.prepare('SELECT id FROM sim_measurements WHERE session_id=? AND group_complete=1').get(s.id))fail('至少完成一组四方向测量才能结束');
+        if(s.case_id!=='case-microscopic'&&!db.prepare('SELECT id FROM sim_measurements WHERE session_id=? AND group_complete=1').get(s.id))fail('至少完成一组四方向测量才能结束');
         db.prepare("UPDATE sim_sessions SET finished=1,status='finished',finished_at=CURRENT_TIMESTAMP WHERE id=?").run(s.id);s={...s,finished:1};
       }
       if(ev.state&&typeof ev.state==='object')db.prepare('UPDATE sim_sessions SET state=? WHERE id=?').run(JSON.stringify(ev.state),s.id);ack.push(ev.eventId);
@@ -39,4 +41,23 @@ r.post('/events',(req,res)=>{
 });
 r.post('/sessions/:id/abandon',(req,res)=>{const s=own(req,req.params.id);if(s.finished)fail('已完成会话不能放弃');db.prepare("UPDATE sim_sessions SET status='abandoned' WHERE id=?").run(s.id);res.json({ok:1});});
 r.get('/sessions',(req,res)=>res.json(db.prepare('SELECT s.*,COUNT(DISTINCT CASE WHEN m.group_complete=1 THEN m.group_id END) points FROM sim_sessions s LEFT JOIN sim_measurements m ON m.session_id=s.id WHERE s.student_id=? GROUP BY s.id ORDER BY s.id DESC').all(req.user.id)));
-r.get('/sessions/:id',(req,res)=>{const s=db.prepare('SELECT * FROM sim_sessions WHERE id=?').get(id(req.params.id));if(!s)fail('会话不存在',404);studentAccess(req.user,s.student_id);res.json({...s,state:parse(s.state),config:parse(s.config),measurements:db.prepare('SELECT * FROM sim_measurements WHERE session_id=? ORDER BY id').all(s.id),abnormals:db.prepare('SELECT * FROM sim_abnormals WHERE session_id=? ORDER BY id').all(s.id),events:db.prepare('SELECT type,event_id,received_at FROM sim_events WHERE session_id=? ORDER BY id').all(s.id)});});module.exports=r;
+r.get('/sessions/:id',(req,res)=>{const s=db.prepare('SELECT * FROM sim_sessions WHERE id=?').get(id(req.params.id));if(!s)fail('会话不存在',404);studentAccess(req.user,s.student_id);res.json({...s,state:parse(s.state),config:parse(s.config),measurements:db.prepare('SELECT * FROM sim_measurements WHERE session_id=? ORDER BY id').all(s.id),abnormals:db.prepare('SELECT * FROM sim_abnormals WHERE session_id=? ORDER BY id').all(s.id),events:db.prepare('SELECT type,event_id,received_at FROM sim_events WHERE session_id=? ORDER BY id').all(s.id)});});r.post('/side-effects',(req,res)=>{
+  const title=text(req.body.title,'记录标题',200);
+  const params=req.body.params,readings=req.body.readings,result=req.body.result;
+  if(!params||typeof params!=='object')fail('参数无效');
+  if(readings!==undefined&&typeof readings!=='object')fail('测量记录无效');
+  if(result!==undefined&&typeof result!=='object')fail('修正结果无效');
+  let conclusion=null;
+  if(req.body.conclusion!==undefined&&req.body.conclusion!==null){
+    if(typeof req.body.conclusion!=='string')fail('实验结论无效');
+    conclusion=req.body.conclusion.trim().slice(0,5000);
+  }
+  const ins=db.prepare('INSERT INTO side_effect_records(student_id,title,params_json,readings_json,result_json,conclusion) VALUES(?,?,?,?,?,?)')
+    .run(req.user.id,title,JSON.stringify(params),JSON.stringify(readings||{}),JSON.stringify(result||{}),conclusion);
+  res.json({id:ins.lastInsertRowid});
+});
+r.get('/side-effects',(req,res)=>{
+  const rows=db.prepare('SELECT id,title,params_json,readings_json,result_json,conclusion,created_at FROM side_effect_records WHERE student_id=? ORDER BY id DESC LIMIT 50').all(req.user.id);
+  res.json(rows.map(x=>({id:x.id,title:x.title,created_at:x.created_at,conclusion:x.conclusion,params:parse(x.params_json),readings:parse(x.readings_json),result:parse(x.result_json)})));
+});
+module.exports=r;

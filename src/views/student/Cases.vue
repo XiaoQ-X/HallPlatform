@@ -69,8 +69,10 @@ const filtered = computed(()=>rows.value.filter(x=>
 async function open(x){ current.value = await api('/resources/cases/'+x.id); }
 function launch(){
   const c = current.value;
+  const cfg = c.sim_config || {};
+  const caseRef = cfg.caseRef || ('case-'+c.id);
   sessionStorage.setItem('pending_sim_config', JSON.stringify({
-    caseRef: 'case-'+c.id, caseTitle: c.title, config: c.sim_config }));
+    caseRef, caseTitle: c.title, config: cfg }));
   router.push('/sim/lab');
 }
 onMounted(async()=>{ rows.value = await api('/resources/cases');if(route.query.id)await open({id:route.query.id}); });

@@ -7,7 +7,10 @@
     </div>
 
     <div class="card p-6 overflow-x-auto">
-      <table class="w-full text-sm min-w-800">
+      <div v-if="loading" class="space-y-3 py-1">
+        <div v-for="i in 9" :key="i" class="skeleton h-7" :style="{width:60+(i%4)*10+'%'}"></div>
+      </div>
+      <table v-else class="w-full text-sm min-w-800">
         <thead><tr class="text-xs text-ink-400">
           <th class="text-left py-3 font-medium">学号</th><th class="text-left font-medium">姓名</th>
           <th class="font-medium">仿真实验<br/>(30%)</th><th class="font-medium">自测题<br/>(25%)</th>
@@ -59,7 +62,7 @@
 import { ref, computed, onMounted } from 'vue';
 import Icon from '../../components/Icon.vue';
 import { api } from '../../api';
-const grades=ref([]);
+const grades=ref([]),loading=ref(true);
 const adj=ref(null), adjComp=ref('sim'), adjScore=ref(null);
 const reason=ref('');
 async function publish(){const reason=prompt('本次发布说明（待评成果须先评阅，缺交项目按当前政策计分）');if(reason){const r=await api('/teacher/grades/publish',{method:'POST',body:{reason}});alert('已发布 '+r.count+' 名学生的成绩快照');}}
@@ -96,5 +99,5 @@ function exportCsv(){
   const blob=new Blob(['\ufeff'+[head.join(','),...lines].join('\n')],{type:'text/csv'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='霍尔效应课程成绩汇总.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
 }
-onMounted(async()=>{ grades.value=await api('/teacher/grades'); });
+onMounted(async()=>{try{grades.value=await api('/teacher/grades');}finally{loading.value=false;}});
 </script>

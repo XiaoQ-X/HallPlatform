@@ -32,4 +32,97 @@ r.post('/pushes',(req,res)=>{
   if(b.target_type==='class'){classAccess(req.user,b.target_id);targets=db.prepare("SELECT id FROM users WHERE class_id=? AND role='student'").all(b.target_id);}else if(b.target_type==='student'){studentAccess(req.user,b.target_id);targets=[{id:id(b.target_id)}];}else fail('目标类型无效');
   const map={case:['cases','/resources/cases'],ideology:['ideology','/resources/ideology'],quiz:['quizzes','/resources/quiz'],project:['projects','/resources/projects']};let link='';if(b.resource_type){const def=map[b.resource_type];if(!def||!db.prepare(`SELECT id FROM ${def[0]} WHERE id=? AND published=1 AND archived=0 AND owner_id=?`).get(id(b.resource_id),req.user.id))fail('资源不可推送');link=def[1]+'?id='+b.resource_id;}
   transaction(()=>{db.prepare('INSERT INTO pushes(teacher_id,target_type,target_id,title,message,resource_type,resource_id) VALUES(?,?,?,?,?,?,?)').run(req.user.id,b.target_type,b.target_id,title,message,b.resource_type||null,b.resource_id||null);for(const t of targets)db.prepare('INSERT INTO notifications(student_id,title,content,link) VALUES(?,?,?,?)').run(t.id,title,message,link);});res.json({ok:1,recipients:targets.length});
-});module.exports=r;
+});
+/* ===== 副效应与误差修正 · 教师管理 ===== */
+const SE_DIMS=[['dim_params','参数设置'],['dim_steps','测量步骤'],['dim_v0','识别V0'],['dim_ve','识别VE'],['dim_reversal','换向修正'],['dim_explain','结果解释']];
+function seStatus(sessions,records,grade){
+  if(grade)return 'graded';
+  if(records.length)return 'submitted';
+  if(sessions.some(x=>x.finished))return 'completed';
+  if(sessions.length)return 'in_progress';
+  return 'not_started';
+}
+function seLastTime(sessions,records){
+  const t=[...sessions.map(x=>x.finished?x.finished_at:x.started_at),...records.map(x=>x.created_at)].filter(Boolean).sort();
+  return t.length?t[t.length-1]:null;
+}
+function seReversal(sessions,records){
+  if(sessions.some(x=>x.finished))return true;
+  const r=records[0];
+  if(r?.readings)return ['V1','V2','V3','V4'].every(k=>Number.isFinite(r.readings[k]));
+  return false;
+}
+function representV0(sessionId,report){
+  const m=db.prepare('SELECT payload FROM sim_measurements WHERE session_id=? ORDER BY id LIMIT 1').get(sessionId);
+  if(m){const p=parse(m.payload,{});if(Number.isFinite(p.V0_mV))return p.V0_mV;}
+  return report.params?report.params.r0*report.params.IS_mA:null;
+}
+function seKey(sessions,records){
+  const done=sessions.find(x=>x.finished);
+  if(done){const report=parse(done.state,{}).report;
+    if(report)return {idealVH_mV:report.afterCorrection_mV,V0_mV:representV0(done.id,report),VE_mV:report.residualVE_mV,corrected_mV:report.correctedHall_mV};}
+  const r=records[0];
+  if(r?.result)return {idealVH_mV:r.result.idealVH_mV,V0_mV:r.params?r.params.r0*r.params.I_mA:null,VE_mV:r.result.residualVE_mV,corrected_mV:r.result.correctedHall_mV};
+  const cur=sessions[0];
+  if(cur){const st=parse(cur.state,{});return {idealVH_mV:st.VH_mV,V0_mV:st.V0_mV,VE_mV:st.VE_mV,corrected_mV:null};}
+  return null;
+}
+function seSessions(studentId){
+  return db.prepare("SELECT * FROM sim_sessions WHERE student_id=? AND case_id='case-side-effects' AND demo=0 ORDER BY id DESC").all(studentId)
+    .map(x=>({...x,state:parse(x.state,{}),config:parse(x.config,{}),
+      measurements:db.prepare('SELECT * FROM sim_measurements WHERE session_id=? ORDER BY id').all(x.id).map(m=>({...m,payload:parse(m.payload,{})})),
+      abnormals:db.prepare('SELECT * FROM sim_abnormals WHERE session_id=? ORDER BY id').all(x.id)}));
+}
+function seRecords(studentId){
+  return db.prepare('SELECT * FROM side_effect_records WHERE student_id=? ORDER BY id DESC').all(studentId)
+    .map(x=>({id:x.id,title:x.title,conclusion:x.conclusion,created_at:x.created_at,
+      params:parse(x.params_json,{}),readings:parse(x.readings_json,{}),result:parse(x.result_json,{})}));
+}
+r.get('/side-effects',(req,res)=>{
+  const rows=students(req).map(s=>{
+    const sessions=db.prepare("SELECT id,started_at,finished_at,finished,state FROM sim_sessions WHERE student_id=? AND case_id='case-side-effects' AND demo=0 ORDER BY id DESC").all(s.id);
+    const records=seRecords(s.id);
+    const grade=db.prepare('SELECT id,total FROM side_effect_grades WHERE student_id=? ORDER BY id DESC LIMIT 1').get(s.id);
+    return {id:s.id,name:s.name,student_no:s.student_no,class_id:s.class_id,class_name:s.class_name,avatar:s.avatar,
+      status:seStatus(sessions,records,grade),sessionCount:sessions.length,recordCount:records.length,
+      lastTime:seLastTime(sessions,records),reversal:seReversal(sessions,records),
+      key:seKey(sessions,records),grade:grade?{id:grade.id,total:grade.total}:null};
+  });
+  res.json(rows);
+});
+r.get('/side-effects/student/:sid',(req,res)=>{
+  const stu=studentAccess(req.user,req.params.sid);
+  const sessions=seSessions(stu.id),records=seRecords(stu.id);
+  const grades=db.prepare('SELECT * FROM side_effect_grades WHERE student_id=? ORDER BY id DESC').all(stu.id);
+  const profile=db.prepare('SELECT id,name,student_no,avatar,class_id FROM users WHERE id=?').get(stu.id);
+  const class_name=db.prepare('SELECT name FROM classes WHERE id=?').get(stu.class_id)?.name||null;
+  res.json({student:{...profile,class_name},status:seStatus(sessions,records,grades[0]),
+    sessions,records,grades});
+});
+r.post('/side-effects/grade',(req,res)=>{
+  const b=req.body;const stu=studentAccess(req.user,b.student_id);
+  const sc={};
+  for(const [k] of SE_DIMS){
+    const v=b.scores?.[k];
+    sc[k]=v===null||v===undefined?null:number(v,k,0,10);
+  }
+  let comment=null;
+  if(b.comment!==undefined){if(typeof b.comment!=='string')fail('评语无效');comment=b.comment.trim().slice(0,2000);}
+  let total=null;
+  if(typeof b.total==='number')total=number(b.total,'总分',0,100);
+  else if(SE_DIMS.every(([k])=>sc[k]!==null))total=SE_DIMS.reduce((a,[k])=>a+sc[k],0)/60*100;
+  else fail('请完成全部维度评分，或直接填写总分');
+  let recordId=null,sessionId=null;
+  if(b.record_id){recordId=id(b.record_id);const r=db.prepare('SELECT student_id FROM side_effect_records WHERE id=?').get(recordId);if(!r||r.student_id!==stu.id)fail('记录不属于该学生');}
+  if(b.session_id){sessionId=id(b.session_id);const ss=db.prepare("SELECT student_id FROM sim_sessions WHERE id=? AND case_id='case-side-effects'").get(sessionId);if(!ss||ss.student_id!==stu.id)fail('会话不属于该学生');}
+  const latest=db.prepare('SELECT * FROM side_effect_grades WHERE student_id=? ORDER BY id DESC LIMIT 1').get(stu.id);
+  const now=new Date().toISOString();
+  const gradeId=transaction(()=>{
+    const info=db.prepare('INSERT INTO side_effect_grades(student_id,record_id,session_id,dim_params,dim_steps,dim_v0,dim_ve,dim_reversal,dim_explain,total,comment,auto,teacher_id,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+      .run(stu.id,recordId,sessionId,sc.dim_params,sc.dim_steps,sc.dim_v0,sc.dim_ve,sc.dim_reversal,sc.dim_explain,total,comment,0,req.user.id,now);
+    audit(req.user.id,latest?'side-effect-grade-update':'side-effect-grade','side-effect-student-'+stu.id,latest,{id:info.lastInsertRowid,...sc,total,comment});
+    return info.lastInsertRowid;
+  });
+  res.json({ok:1,id:gradeId});
+});
+module.exports=r;
