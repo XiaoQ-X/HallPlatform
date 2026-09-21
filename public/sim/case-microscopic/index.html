@@ -52,13 +52,13 @@ function loadUnity(){
   progressEl.value=0;
   setStatus('正在加载微观实验');
   loaderEl=document.createElement('script');
-  loaderEl.src='Build/BuildWebGL.loader.js?v=20260920p';
+  loaderEl.src='Build/BuildWebGL.loader.js?v=20260921n';
   loaderEl.onerror=()=>handleFail('实验加载脚本下载失败，可能是网络中断。');
   loaderEl.onload=()=>{
     createUnityInstance(canvas,{
-      dataUrl:'Build/BuildWebGL.data.unityweb?v=20260920p',
-      frameworkUrl:'Build/BuildWebGL.framework.js.unityweb?v=20260920p',
-      codeUrl:'Build/BuildWebGL.wasm.unityweb?v=20260920p',
+      dataUrl:'Build/BuildWebGL.data.unityweb?v=20260921n',
+      frameworkUrl:'Build/BuildWebGL.framework.js.unityweb?v=20260921n',
+      codeUrl:'Build/BuildWebGL.wasm.unityweb?v=20260921n',
       streamingAssetsUrl:'StreamingAssets',companyName:'Hall Effect Lab',productName:'Microscopic Lab',productVersion:'1.0.0-web.1',
       matchWebGLToCanvasSize:true,devicePixelRatio:Math.min(window.devicePixelRatio||1,2)
     },p=>{progressEl.value=p;}).then(instance=>{
