@@ -9,13 +9,12 @@ html,body{margin:0;width:100%;height:100%;background:#0d1518;overflow:hidden;fon
 progress{width:260px;accent-color:#2dd4bf}
 #status{white-space:pre-wrap;max-width:90vw;min-height:1.2em}
 #retrybtn{display:none;margin:4px auto 0;padding:9px 26px;border:0;border-radius:999px;background:linear-gradient(135deg,#14b8a6,#0d9488);color:#fff;font-size:14px;cursor:pointer;box-shadow:0 8px 20px -8px rgba(13,148,136,.7)}
-#fullscreen{position:absolute;right:10px;bottom:10px;width:34px;height:34px;border:1px solid #3a4a4d;background:#162226;color:#cfe9e2;border-radius:6px;font-size:20px;cursor:pointer;z-index:5}
-#hint{position:absolute;left:10px;top:10px;font-size:11px;color:#8fb3ab;background:rgba(13,21,24,.55);padding:6px 10px;border-radius:8px;max-width:60vw;line-height:1.6}
+#fullscreen{position:absolute;right:12px;bottom:12px;width:40px;height:40px;border:1px solid #3a4a4d;background:rgba(22,34,38,.96);color:#cfe9e2;border-radius:8px;font-size:22px;cursor:pointer;z-index:100;pointer-events:auto;box-shadow:0 4px 14px rgba(0,0,0,.28)}
+#fullscreen:focus-visible{outline:3px solid #5eead4;outline-offset:2px}
 </style></head>
 <body>
 <div id="stage">
   <canvas id="unity-canvas" tabindex="0" aria-label="霍尔效应微观机理演示"></canvas>
-  <div id="hint">拖动旋转视角 · 滚轮/双指缩放 · 单指拖动平移</div>
   <div id="loading">
     <strong>微观机理演示</strong>
     <progress id="progress" max="1" value="0"></progress>
@@ -24,7 +23,7 @@ progress{width:260px;accent-color:#2dd4bf}
   </div>
   <button id="fullscreen" title="全屏" aria-label="全屏">⛶</button>
 </div>
-<script src="../hall-host.js"></script>
+<script src="../hall-host.js?v=20260923formula4"></script>
 <script>
 const canvas=document.getElementById('unity-canvas');
 const loadingEl=document.getElementById('loading');
@@ -52,16 +51,16 @@ function loadUnity(){
   progressEl.value=0;
   setStatus('正在加载微观实验');
   loaderEl=document.createElement('script');
-  loaderEl.src='Build/BuildWebGL.loader.js?v=20260921n';
+  loaderEl.src='Build/BuildWebGL.loader.js?v=20260923formula4';
   loaderEl.onerror=()=>handleFail('实验加载脚本下载失败，可能是网络中断。');
   loaderEl.onload=()=>{
     createUnityInstance(canvas,{
-      dataUrl:'Build/BuildWebGL.data.unityweb?v=20260921n',
-      frameworkUrl:'Build/BuildWebGL.framework.js.unityweb?v=20260921n',
-      codeUrl:'Build/BuildWebGL.wasm.unityweb?v=20260921n',
+      dataUrl:'Build/BuildWebGL.data.unityweb?v=20260923formula4',
+      frameworkUrl:'Build/BuildWebGL.framework.js.unityweb?v=20260923formula4',
+      codeUrl:'Build/BuildWebGL.wasm.unityweb?v=20260923formula4',
       streamingAssetsUrl:'StreamingAssets',companyName:'Hall Effect Lab',productName:'Microscopic Lab',productVersion:'1.0.0-web.1',
       matchWebGLToCanvasSize:true,devicePixelRatio:Math.min(window.devicePixelRatio||1,2)
-    },p=>{progressEl.value=p;}).then(instance=>{
+    },p=>{progressEl.value=p;setStatus('正在加载微观实验（'+Math.round(p*100)+'%）');}).then(instance=>{
       window.unityInstance=instance;window.HallHost.attach(instance);
       loadingEl.style.display='none';
       wireFullscreen();
@@ -86,13 +85,14 @@ retryBtn.addEventListener('click',()=>{attempt=0;loadUnity();});
 function wireFullscreen(){
   const stage=document.getElementById('stage');const fsBtn=document.getElementById('fullscreen');
   const isFs=()=>!!(document.fullscreenElement||document.webkitFullscreenElement);
-  const enterFs=()=>{const el=stage;(el.requestFullscreen||el.webkitRequestFullScreen).call(el);};
-  const leaveFs=()=>{const d=document;(d.exitFullscreen||d.webkitExitFullscreen).call(d);};
-  fsBtn.onclick=()=>{isFs()?leaveFs():enterFs();};
+  const enterFs=()=>{const el=stage,fn=el.requestFullscreen||el.webkitRequestFullScreen;if(fn)return Promise.resolve(fn.call(el));return Promise.reject(new Error('fullscreen unavailable'));};
+  const leaveFs=()=>{const d=document,fn=d.exitFullscreen||d.webkitExitFullscreen;if(fn)return Promise.resolve(fn.call(d));return Promise.reject(new Error('fullscreen unavailable'));};
+  fsBtn.onclick=()=>{(isFs()?leaveFs():enterFs()).catch(()=>{setStatus('浏览器未授予全屏权限，可使用 Esc 或浏览器菜单退出。','#e6b450');}).finally(syncFs);};
   const syncFs=()=>{const on=isFs();fsBtn.textContent=on?'✕':'⛶';fsBtn.title=on?'退出全屏（Esc）':'全屏';};
   document.addEventListener('fullscreenchange',syncFs);document.addEventListener('webkitfullscreenchange',syncFs);
+  syncFs();
 }
 
 loadUnity();
 </script>
-</body></html>
+</body></html>\n

@@ -17,8 +17,9 @@
         </div>
         <div class="ml-auto flex gap-2">
           <button class="btn-ghost" @click="restart"><Icon name="refresh":size="16"/> 重新开始</button>
-          <button class="btn-soft" :disabled="!initialized" @click="finish"><Icon name="check":size="16"/> 结束实验</button>
-          <button class="btn-primary" @click="fullscreen"><Icon name="cap":size="16"/> 全屏</button>
+          <button v-if="!isStandalone" class="btn-soft" :disabled="!initialized" @click="finish"><Icon name="check":size="16"/> 结束实验</button>
+          <button v-else class="btn-soft" @click="exitStandalone"><Icon name="logout":size="16"/> 退出演示</button>
+          <button class="btn-primary" title="浏览器全屏" @click="fullscreen"><Icon name="fullscreen":size="16"/> 全屏</button>
         </div>
       </div>
 
@@ -42,22 +43,29 @@
       </div>
     </div>
 
-    <div class="grid xl:grid-cols-3 gap-5">
+    <!-- Unity 本身已经包含一套 420px 的教学面板。只有在足够宽的桌面视口才把网页辅助栏放到右侧，
+         否则 1440px 窗口会把三维仪器压缩到看不清旋钮和示数。 -->
+    <div :class="['grid gap-5', isStandalone ? 'grid-cols-1' : 'min-[1800px]:grid-cols-[minmax(0,1fr)_360px]']">
       <!-- 仿真画面 -->
-      <div :class="isStandalone?'xl:col-span-3':'xl:col-span-2'">
+      <div>
         <div ref="simWrap" class="rounded-[1.8rem] overflow-hidden shadow-lift border-4 border-white bg-[#e6eceb] relative" style="height:calc(100vh - 210px);min-height:560px">
-          <button v-if="isFullscreen" class="absolute top-2 right-3 z-30 px-3 py-1.5 rounded-lg bg-black/60 text-white text-xs hover:bg-black/80" @click="exitFullscreen">退出全屏 (Esc)</button>
-          <div class="absolute top-0 inset-x-0 h-10 glass z-20 flex items-center px-4 gap-2 rounded-b-xl">
-            <span class="w-3 h-3 rounded-full bg-rose-400"></span><span class="w-3 h-3 rounded-full bg-amber-400"></span><span class="w-3 h-3 rounded-full bg-emerald-400"></span>
-            <span class="ml-2 text-xs text-ink-500">hall-sim · Unity WebGL</span>
-            <span v-if="loading" class="ml-auto text-xs text-brand-600 flex items-center gap-2"><span class="w-3 h-3 rounded-full border-2 border-brand-300 border-t-brand-600 animate-spin"></span>实验加载中…</span>
-          </div>
-          <iframe ref="frame" :src="frameSrc" class="w-full h-full" frameborder="0" allow="fullscreen"></iframe>
+          <button v-if="isFullscreen" class="absolute top-2 right-3 z-[100] pointer-events-auto px-3 py-1.5 rounded-lg bg-black/75 text-white text-xs shadow-lg hover:bg-black/90 focus:outline-none focus:ring-2 focus:ring-white" aria-label="退出浏览器全屏" @click="exitFullscreen">退出全屏 (Esc)</button>
+          <button v-if="!isStandalone && initialized && !isFullscreen"
+            class="absolute top-2 right-2 z-30 w-9 h-9 rounded-lg bg-brand-700/95 text-white shadow-lg hover:bg-brand-800 focus:outline-none focus:ring-2 focus:ring-white/80"
+            title="退出仿真并返回首页" aria-label="退出仿真并返回首页" @click="exitSimulation">
+            <Icon name="logout" :size="17" class="mx-auto"/>
+          </button>
+          <!-- Unity 画布自带顶部工具区；网页层不再覆盖画布，避免缩放或全屏时遮住标题、视角和退出控件。 -->
+          <iframe ref="frame" :src="frameSrc" class="relative z-0 w-full h-full" frameborder="0" allow="fullscreen"></iframe>
           <div v-if="loadFailed" class="absolute inset-0 z-40 bg-[#e6eceb] flex flex-col items-center justify-center gap-4 p-6 text-center">
             <div class="w-14 h-14 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center"><Icon name="alert" :size="26"/></div>
             <div class="text-sm text-ink-700 max-w-sm leading-6">{{ failMsg }}</div>
             <button class="btn-primary" @click="reloadFrame"><Icon name="refresh" :size="16"/> 重新加载实验</button>
           </div>
+        </div>
+        <div v-if="!isStandalone" class="mt-3 rounded-2xl border border-brand-100 bg-brand-50/70 px-4 py-3 text-xs leading-5 text-ink-600">
+          <span class="font-semibold text-brand-800">测试仪旋钮与示数：</span>
+          IS 量程 0–10 mA、每格 0.05 mA；IM 量程 0–1 A、每格 0.005 A。当前值以测试仪数字屏和底部读数栏为准。
         </div>
       </div>
 
@@ -71,13 +79,13 @@
 
           <!-- 数据 -->
           <div v-if="tab==='data'" class="space-y-3 max-h-[420px] overflow-y-auto">
-            <div v-if="groups.length" class="text-xs text-ink-400 mb-1">已合成完整组（霍尔电压）</div>
+                <div v-if="groups.length" class="text-xs text-ink-400 mb-1">已合成完整组（Vcorr = VH + VE；已抵消 V0、VN、VRL，尚未扣除 VE）</div>
             <div v-for="g in groups" :key="g.groupId" class="p-3 rounded-2xl bg-brand-50/70">
               <div class="flex items-center text-sm">
                 <b class="text-brand-800">{{ g.groupId }}</b>
-                <span class="ml-auto text-brand-700 font-bold">{{ g.VH_mV?.toFixed(2) }} mV</span>
+                <span class="ml-auto text-brand-700 font-bold">Vcorr {{ g.VH_mV?.toFixed(2) }} mV</span>
               </div>
-              <div class="text-[11px] text-ink-400 mt-1">IS {{ g.IS_mA }} mA · IM {{ g.IM_A }} A · B {{ g.B_T?.toFixed(3) }} T</div>
+              <div class="text-[11px] text-ink-400 mt-1">IS {{ formatIs(g.IS_mA) }} mA · IM {{ formatIm(g.IM_A) }} A · B {{ formatB(g.B_T) }} T</div>
             </div>
             <div v-if="lastRaw" class="p-3 rounded-2xl border border-dashed border-ink-200 text-xs text-ink-500">
               最近单方向读数（槽位{{ lastRaw.slot }}）：<b class="text-ink-700">{{ lastRaw.rawVoltage_mV?.toFixed(2) }} mV</b>
@@ -105,7 +113,8 @@
             <div class="flex gap-2"><b class="text-brand-600">2</b> 检查回路，电流设定归零后 POWER 开机</div>
             <div class="flex gap-2"><b class="text-brand-600">3</b> 设置 IS、IM，等待读数稳定后记录</div>
             <div class="flex gap-2"><b class="text-brand-600">4</b> 断电换向，完成四个方向测量</div>
-            <div class="flex gap-2"><b class="text-brand-600">5</b> 完成 VH-IS、VH-IM 扫描后结束实验</div>
+            <div class="flex gap-2"><b class="text-brand-600">5</b> 完成 VH-IS、VH-IM 扫描后结束实验；VH-IM 在磁芯未饱和区才近似线性</div>
+            <div class="flex gap-2"><b class="text-brand-600">6</b> 测试仪旋钮步进为 IS 0.05 mA / 格、IM 0.005 A / 格；数值以数字屏和底部读数栏为准</div>
           </div>
         </div>
 
@@ -126,7 +135,7 @@
 
 <script setup>
 import { ref, onMounted, onBeforeUnmount, computed } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import katex from 'katex';
 import Icon from '../../components/Icon.vue';
 import { api } from '../../api';
@@ -134,6 +143,7 @@ import {createOutbox} from '../../sim-outbox';
 import {abnormalName,abnormalDetail} from '../../abnormal-codes';
 
 const route = useRoute();
+const router = useRouter();
 const frame = ref(null);
 const simWrap = ref(null);
 const isFullscreen = ref(false);
@@ -162,7 +172,12 @@ function loadPending(){
   }catch{}
 }
 
-const caseId = computed(()=> route.query.case ? 'case-'+String(route.query.case) : (pending.value.caseRef || 'hall-basic'));
+const caseId = computed(()=> {
+  if(!route.query.case) return pending.value.caseRef || 'hall-basic';
+  const raw=String(route.query.case);
+  if(raw==='hall-basic'||raw==='case-hall-basic') return 'hall-basic';
+  return raw.startsWith('case-') ? raw : 'case-'+raw;
+});
 const CASE_FRAMES = {
   'hall-basic': ['/sim/index.html','霍尔效应基础实验'],
   'case-microscopic': ['/sim/case-microscopic/index.html','微观机理演示'],
@@ -176,6 +191,9 @@ const groups = computed(()=> measurements.value.filter(m=>m.groupComplete));
 const lastRaw = computed(()=> measurements.value[measurements.value.length-1]);
 const doneDir = computed(()=>{const last=lastRaw.value;if(!last)return 0;return new Set(measurements.value.filter(m=>m.groupId===last.groupId).map(m=>m.slot)).size;});
 const progressPct = computed(()=>doneDir.value/4*100);
+const formatIs = v => Number.isFinite(Number(v)) ? Number(v).toFixed(2) : '—';
+const formatIm = v => Number.isFinite(Number(v)) ? Number(v).toFixed(3) : '—';
+const formatB = v => Number.isFinite(Number(v)) ? Number(v).toFixed(3) : '—';
 const taskHtml = computed(()=>{
   const t = pending.value.taskGoal;
   if(!t) return '';
@@ -212,6 +230,12 @@ async function onMessage(e) {
   if (d.source === 'hall-unity') {
     const ev = d.event;
     if(!ev||!accepting||ev.isDemo||ev.type==='OnReady')return;
+    if(ev.type==='OnExitRequested'){
+      accepting=false;
+      await abandonActiveSession().catch(()=>{});
+      await router.push('/');
+      return;
+    }
     if(ev.type==='OnSnapshot'){if(ev.state)state.value=ev.state;return;}
     if(!ev.eventId||seenEvents.has(ev.eventId))return;
     seenEvents.add(ev.eventId);
@@ -249,11 +273,34 @@ async function newSession(){
   state.value={}; events.value=[]; measurements.value=[]; abnormals.value=[];
   init();
 }
-async function restart(){if(!outbox)return;if(!confirm('结束当前操作并新建实验？已保存数据会保留。'))return;try{await outbox.flush();if(psid.value&&!state.value.finished)await api('/sim/sessions/'+psid.value+'/abandon',{method:'POST'});await newSession();}catch(e){error.value=e.message;}}
+async function restart(){if(!outbox)return;if(!confirm('结束当前操作并新建实验？已保存数据会保留。'))return;try{await abandonActiveSession();await newSession();}catch(e){error.value=e.message;}}
 function finish() { if(initialized.value)send('FinishFromWeb'); }
-function fullscreen() { simWrap.value?.requestFullscreen?.(); }
-function exitFullscreen() { if (document.fullscreenElement) document.exitFullscreen?.(); }
-function onFsChange() { isFullscreen.value = !!document.fullscreenElement; }
+async function exitSimulation(){
+  try{ accepting=false; await abandonActiveSession(); await router.push('/'); }
+  catch(e){ accepting=true; error.value=e.message; }
+}
+async function exitStandalone(){
+  try{ await abandonActiveSession(); await router.push('/'); }
+  catch(e){ error.value=e.message; }
+}
+async function fullscreen() {
+  const el=simWrap.value;
+  const request=el?.requestFullscreen||el?.webkitRequestFullscreen;
+  if (!request) { error.value='当前浏览器不支持全屏，请使用新版 Chrome/Edge。'; return; }
+  try {
+    await request.call(el);
+    isFullscreen.value = true;
+  } catch {
+    isFullscreen.value = !!(document.fullscreenElement||document.webkitFullscreenElement);
+    error.value='浏览器未授予全屏权限，可使用 Esc 或右下角全屏按钮。';
+  }
+}
+function exitFullscreen() {
+  const exit=document.exitFullscreen||document.webkitExitFullscreen;
+  if (exit) { const result=exit.call(document); if(result?.catch) result.catch(()=>{}); }
+  isFullscreen.value = false;
+}
+function onFsChange() { isFullscreen.value = !!(document.fullscreenElement||document.webkitFullscreenElement); }
 
 function hasWebGL(){try{const c=document.createElement('canvas');return !!(window.WebGLRenderingContext&&(c.getContext('webgl2')||c.getContext('webgl')));}catch{return false;}}
 function armLoadTimer(){clearTimeout(loadTimer);loadTimer=setTimeout(()=>{if(loading.value){loading.value=false;failMsg.value='实验加载超时：70 秒内未能完成初始化。请检查网络连接后重新加载，或使用支持 WebGL 的新版 Chrome/Edge。';loadFailed.value=true;}},70000);}
@@ -262,6 +309,24 @@ function reloadFrame(){
   try{if(frame.value)frame.value.src=frameSrc.value+(frameSrc.value.includes('?')?'&':'?')+'t='+Date.now();}catch{}
   armLoadTimer();
 }
-onMounted(()=>{ loadPending(); if(!hasWebGL()&&frameSrc.value==='/sim/index.html'){loading.value=false;failMsg.value='当前浏览器不支持 WebGL，无法加载三维实验；请使用新版 Chrome/Edge 并开启硬件加速。';loadFailed.value=true;} window.addEventListener('message', onMessage); document.addEventListener('fullscreenchange', onFsChange); });
-onBeforeUnmount(()=>{clearInterval(timer);clearTimeout(loadTimer);outbox?.flush().catch(()=>{});window.removeEventListener('message',onMessage);document.removeEventListener('fullscreenchange', onFsChange);});
+async function abandonActiveSession(){
+  const id=psid.value;
+  if(!id||state.value.finished)return;
+  // Flush first so a normal route change never abandons acknowledged events.
+  // Keep the promise alive after unmount; the API request does not depend on
+  // component state and prevents unfinished sessions accumulating as active.
+  await outbox?.flush?.();
+  await api('/sim/sessions/'+id+'/abandon',{method:'POST'});
+}
+function abandonOnPageHide(){
+  const id=psid.value;
+  // A keepalive request is reliable for the common refresh/close case only
+  // after the outbox is empty; pending events must survive for the next load.
+  if(!id||state.value.finished||outbox?.pending)return;
+  const token=localStorage.getItem('hall_token');
+  if(!token)return;
+  fetch('/api/sim/sessions/'+id+'/abandon',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:'{}',keepalive:true}).catch(()=>{});
+}
+onMounted(()=>{ loadPending(); if(!hasWebGL()&&frameSrc.value==='/sim/index.html'){loading.value=false;failMsg.value='当前浏览器不支持 WebGL，无法加载三维实验；请使用新版 Chrome/Edge 并开启硬件加速。';loadFailed.value=true;} window.addEventListener('message', onMessage); window.addEventListener('pagehide',abandonOnPageHide); document.addEventListener('fullscreenchange', onFsChange); document.addEventListener('webkitfullscreenchange', onFsChange); });
+onBeforeUnmount(()=>{clearInterval(timer);clearTimeout(loadTimer);abandonActiveSession().catch(()=>{});window.removeEventListener('message',onMessage);window.removeEventListener('pagehide',abandonOnPageHide);document.removeEventListener('fullscreenchange', onFsChange);document.removeEventListener('webkitfullscreenchange', onFsChange);});
 </script>

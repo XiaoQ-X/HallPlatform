@@ -134,7 +134,14 @@ const lists=ref({cases:[],ideology:[],questions:[],quizzes:[],projects:[]});
 const form=ref(null),qform=ref(null),quizForm=ref(null),tasksText=ref(''),attText=ref('');
 const configTitle=ref(''),configGoal=ref('');
 const maxIs=ref(10),maxIm=ref(1),xAxis=ref('IS_mA');
-async function attach(e){const f=e.target.files[0];if(f){const uploaded=await upload(f);form.value.attachments=(form.value.attachments||[]).filter(x=>x.id);form.value.attachments.push(uploaded);}}
+async function attach(e){const f=e.target.files[0];if(f){
+  const target=form.value;
+  const uploaded=await upload(f);
+  // 编辑窗口可能在上传完成前被关闭或切换到另一条资源。
+  if(form.value!==target||!target)return;
+  target.attachments=(target.attachments||[]).filter(x=>x.id);
+  target.attachments.push(uploaded);
+}}
 const typeName={single:'单选',multiple:'多选',judge:'判断',fill:'填空',essay:'简答'};
 const tabLabel=()=>tabs.find(t=>t.k===tab.value)?.label;
 async function load(){ for(const k of ['cases','ideology','questions','quizzes','projects']){

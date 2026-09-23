@@ -1,4 +1,5 @@
 const r=require('express').Router();const {db,fail,parse,text,number,id,transaction,studentAccess}=require('../common');
+const {correctByReversal}=require('../../shared/calculations.cjs');
 function own(req,key){const s=db.prepare('SELECT * FROM sim_sessions WHERE id=?').get(id(key));if(!s)fail('会话不存在',404);if(s.student_id!==req.user.id)fail('只能写入本人会话',403);return s;}
 r.post('/start',(req,res)=>{
   const caseId=req.body.case_id||'hall-basic';text(caseId,'案例编号',100);
@@ -7,6 +8,11 @@ r.post('/start',(req,res)=>{
   if(builtin[caseId]){cfg={...cfg,...builtin[caseId]};}
   else {const owner=req.user.role==='teacher'?req.user.id:db.prepare('SELECT teacher_id FROM classes WHERE id=?').get(req.user.class_id)?.teacher_id;const c=db.prepare('SELECT sim_config FROM cases WHERE id=? AND published=1 AND archived=0 AND owner_id=?').get(id(caseId.replace(/^case-/,'')),owner||0);if(!c)fail('案例不可用');cfg={...cfg,...parse(c.sim_config)};}
   if(cfg.material!=='n-silicon'||cfg.thickness_mm!==.5||cfg.maxIs_mA>10||cfg.maxIm_A>1)fail('案例配置不受引擎支持');
+  // The student UI has no resume flow: opening the same case again starts a
+  // new Unity session. Close an older unfinished session first so refreshes
+  // and route re-entry do not leave an ever-growing list of active sessions.
+  db.prepare("UPDATE sim_sessions SET status='abandoned' WHERE student_id=? AND case_id=? AND status='active' AND finished=0")
+    .run(req.user.id,caseId);
   const result=db.prepare('INSERT INTO sim_sessions(student_id,case_id,config,state) VALUES(?,?,?,?)').run(req.user.id,caseId,JSON.stringify(cfg),'{}');res.json({platformSessionId:result.lastInsertRowid,config:cfg});
 });
 r.post('/events',(req,res)=>{
@@ -26,8 +32,25 @@ r.post('/events',(req,res)=>{
         const m=ev.measurement;if(!m)fail('缺少测量数据');text(m.groupId,'组编号',200);number(m.slot,'方向槽位',1,4);if(!Number.isInteger(m.slot))fail('方向槽位无效');
         for(const k of ['isDirection','imDirection','voltageDirection'])if(![-1,1].includes(m[k]))fail('方向无效');
         number(m.IS_mA,'工作电流',-10,10);number(m.IM_A,'励磁电流',-1,1);number(m.B_T,'磁场',-100,100);number(m.rawVoltage_mV,'原始电压',-200,200);
+        const expectedDirection={1:[1,1],2:[1,-1],3:[-1,-1],4:[-1,1]}[m.slot];
+        if(m.isDirection!==expectedDirection[0]||m.imDirection!==expectedDirection[1])
+          fail('方向槽位与电流/磁场方向不匹配，请按 V1(+,+)、V2(+,-)、V3(-,-)、V4(-,+) 记录');
         let vh=null;
-        if(m.groupComplete){const prior=db.prepare('SELECT slot,raw_mV FROM sim_measurements WHERE session_id=? AND group_id=? ORDER BY id').all(s.id,m.groupId);const raw=new Map(prior.map(x=>[x.slot,x.raw_mV]));raw.set(m.slot,m.rawVoltage_mV);if(raw.size!==4)fail('缺少完整四方向原始读数');vh=(raw.get(1)-raw.get(2)+raw.get(3)-raw.get(4))/4;}
+        if(m.groupComplete){
+          const prior=db.prepare('SELECT slot,is_dir,im_dir,v_dir,IS_mA,IM_A,B_T,raw_mV FROM sim_measurements WHERE session_id=? AND group_id=? ORDER BY id').all(s.id,m.groupId);
+          // A repeated slot is a re-read: the latest value is the one used in
+          // the four-direction combination, while the append-only event log
+          // still keeps the earlier attempt for review.
+          const latest=new Map(prior.map(x=>[x.slot,x]));
+          latest.set(m.slot,{slot:m.slot,is_dir:m.isDirection,im_dir:m.imDirection,v_dir:m.voltageDirection,IS_mA:m.IS_mA,IM_A:m.IM_A,B_T:m.B_T,raw_mV:m.rawVoltage_mV});
+          if(latest.size!==4)fail('缺少完整四方向原始读数');
+          const rows=[1,2,3,4].map(slot=>latest.get(slot));
+          const ref=rows[0];
+          const close=(a,b,tol)=>Math.abs(a-b)<=tol*Math.max(1,Math.abs(a),Math.abs(b));
+          if(rows.some(x=>x.v_dir!==ref.v_dir||!close(Math.abs(x.IS_mA),Math.abs(ref.IS_mA),1e-4)||!close(Math.abs(x.IM_A),Math.abs(ref.IM_A),1e-5)||!close(Math.abs(x.B_T),Math.abs(ref.B_T),1e-4)))
+            fail('四方向必须保持工作电流、励磁电流、磁场幅值和电压接线方向一致');
+          vh=(rows[0].raw_mV-rows[1].raw_mV+rows[2].raw_mV-rows[3].raw_mV)/4;
+        }
         db.prepare('INSERT INTO sim_measurements(session_id,group_id,slot,is_dir,im_dir,v_dir,IS_mA,IM_A,B_T,raw_mV,VH_mV,normVH_mV,group_complete,payload,measured_at,event_id,series_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(s.id,m.groupId,m.slot,m.isDirection,m.imDirection,m.voltageDirection,m.IS_mA,m.IM_A,m.B_T,m.rawVoltage_mV,vh,vh==null?null:vh*m.voltageDirection,m.groupComplete?1:0,JSON.stringify(m),ev.timestamp||new Date().toISOString(),ev.eventId,m.row?.seriesId||'legacy');
       }
       if(ev.type==='OnAbnormalEvent')db.prepare('INSERT INTO sim_abnormals(session_id,code,detail,success,step,payload,event_id) VALUES(?,?,?,?,?,?,?)').run(s.id,text(ev.code,'异常代码',100),String(ev.detail||'').slice(0,2000),ev.success?1:0,Number.isInteger(ev.step)?ev.step:null,JSON.stringify(ev),ev.eventId);
@@ -45,15 +68,46 @@ r.get('/sessions/:id',(req,res)=>{const s=db.prepare('SELECT * FROM sim_sessions
   const title=text(req.body.title,'记录标题',200);
   const params=req.body.params,readings=req.body.readings,result=req.body.result;
   if(!params||typeof params!=='object')fail('参数无效');
-  if(readings!==undefined&&typeof readings!=='object')fail('测量记录无效');
-  if(result!==undefined&&typeof result!=='object')fail('修正结果无效');
+  if(!readings||typeof readings!=='object')fail('请先完成四方向测量');
+  if(['V1','V2','V3','V4'].some(k=>!Number.isFinite(readings[k])))fail('四方向测量必须完整且为有限数值');
+  if(!result||typeof result!=='object')fail('修正结果无效');
+  if(['correctedHall_mV','residualVE_mV','idealVH_mV'].some(k=>!Number.isFinite(result[k])))fail('修正结果不完整');
+  let expected;
+  try {
+    expected=correctByReversal({
+      I:Number(params.I_mA)/1000,
+      B:Number(params.B_T),
+      RH:Number(params.RH),
+      d:Number(params.d_mm)/1000,
+      r0:Number(params.r0),
+      ettinghausenCoeff:Number(params.kE),
+      nernstCoeff:Number(params.kN_mV_T??0)/1000,
+      righiLeducCoeff:Number(params.kRL_mV_T??0)/1000
+    });
+  } catch(e) { fail('副效应参数无效：'+e.message); }
+  // The browser is a presentation layer. Recompute the four-direction result
+  // here so a forged finite payload cannot become a teaching record with an
+  // incorrect formula or unit conversion.
+  const expectedReadings=Object.fromEntries(expected.readings.map(x=>[x.name,x.Vmeasured*1000]));
+  const expectedResult={
+    correctedHall_mV:expected.correctedHall*1000,
+    residualVE_mV:(expected.residual.value??0)*1000,
+    idealVH_mV:expected.idealVH*1000
+  };
+  const close=(a,b)=>Math.abs(a-b)<=.01*Math.max(1,Math.abs(a),Math.abs(b));
+  if(['V1','V2','V3','V4'].some(k=>!close(Number(readings[k]),expectedReadings[k])))fail('四方向读数与当前参数不一致，请重新完成测量');
+  if(Object.keys(expectedResult).some(k=>!close(Number(result[k]),expectedResult[k])))fail('修正结果与四方向公式不一致，请重新计算');
+  const verifiedParams={I_mA:Number(params.I_mA),B_T:Number(params.B_T),RH:Number(params.RH),d_mm:Number(params.d_mm),r0:Number(params.r0),kE:Number(params.kE),kN_mV_T:Number(params.kN_mV_T??0),kRL_mV_T:Number(params.kRL_mV_T??0)};
+  const verifiedReadings=Object.fromEntries(Object.entries(expectedReadings).map(([k,v])=>[k,Number(v.toFixed(4))]));
+  const verifiedResult=Object.fromEntries(Object.entries(expectedResult).map(([k,v])=>[k,Number(v.toFixed(4))]));
   let conclusion=null;
   if(req.body.conclusion!==undefined&&req.body.conclusion!==null){
     if(typeof req.body.conclusion!=='string')fail('实验结论无效');
     conclusion=req.body.conclusion.trim().slice(0,5000);
   }
+  if(!conclusion||conclusion.length<10)fail('请填写至少 10 个字的实验结论');
   const ins=db.prepare('INSERT INTO side_effect_records(student_id,title,params_json,readings_json,result_json,conclusion) VALUES(?,?,?,?,?,?)')
-    .run(req.user.id,title,JSON.stringify(params),JSON.stringify(readings||{}),JSON.stringify(result||{}),conclusion);
+    .run(req.user.id,title,JSON.stringify(verifiedParams),JSON.stringify(verifiedReadings),JSON.stringify(verifiedResult),conclusion);
   res.json({id:ins.lastInsertRowid});
 });
 r.get('/side-effects',(req,res)=>{

@@ -1,9 +1,9 @@
 const fs=require('fs'),path=require('path'),crypto=require('crypto');
-const db=require('../server/db');require('../server/content-migration')(db);require('../server/integrity-migration')(db);
+const db=require('../server/db');require('../server/content-migration')(db);require('../server/formula-migration')(db);require('../server/integrity-migration')(db);
 const directory=process.env.HALL_UPLOAD_DIR||path.resolve(__dirname,'../uploads');fs.mkdirSync(directory,{recursive:true});
 const topics={
   1:'固定励磁电流，扫描工作电流。每个扫描点完成四方向记录。拟合归一霍尔电压与工作电流；讨论截距、残差及固定条件。',
-  2:'固定工作电流，扫描励磁电流。记录磁场B与霍尔电压，分别拟合VH-B及VH-IM。不可将IM直接当成磁感应强度，需保留B-IM标定依据。',
+  2:'固定工作电流，扫描励磁电流。记录磁场B与霍尔电压，分别拟合VH-B及VH-IM；VH-IM 只在磁芯未饱和区近似线性，需记录接近饱和时的偏离。不可将IM直接当成磁感应强度，需保留B-IM标定依据。',
   3:'先求霍尔系数RH=VH*d/(IS*B)。单载流子近似下n=1/(e*|RH|)。迁移率mu=|RH|*sigma，sigma须由教师提供或实物测量；本Unity实验不提供纵向电压测量。',
   4:'设计电流传感器标定方案。仿真中只能固定IS并扫描IM来类比被测电流产生的磁场；实际模块的量程、供电、灵敏度、误差限须依据所选厂商数据手册和标准电流源实测，不得将此仿真读数称为模块实测标定结果。',
   5:'记录错误接线、超量程请求、未稳定记录等不同异常，整理触发条件、系统反馈、影响与纠正证据。同条件重复测量可用中位数/MAD辅助识别疑点；异常必须记录成因，不可仅因偏离拟合而删除。'

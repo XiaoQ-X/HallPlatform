@@ -17,7 +17,7 @@
           <th class="font-medium">操作</th></tr></thead>
         <tbody>
           <tr v-for="s in students" :key="s.id" class="border-t border-ink-50">
-            <td class="py-3 text-ink-500">{{ s.username }}</td>
+            <td class="py-3 text-ink-500" :title="s.account_label?'登录账号保持不变':''">{{ s.account_label||s.username }}</td>
             <td class="text-left flex items-center gap-2"><span>{{ s.avatar }}</span>{{ s.name }}</td>
             <td class="text-center">{{ s.student_no||'—' }}</td>
             <td class="text-center">{{ s.class_name||'未分班' }}</td>
@@ -34,13 +34,19 @@
     <div v-if="form" class="modal-mask" @click.self="form=null">
       <div class="modal p-6">
         <h3 class="font-bold text-lg mb-4">{{ form.id?'编辑学生':'新建学生账号' }}</h3>
-        <label class="text-xs text-ink-400">登录账号</label>
-        <input v-model="form.username" class="input mb-3" :disabled="!!form.id" placeholder="如 zhangsan"/>
-        <label class="text-xs text-ink-400">姓名</label>
-        <input v-model="form.name" class="input mb-3"/>
+        <template v-if="!form.id || !anonymousPresentation">
+          <label class="text-xs text-ink-400">登录账号</label>
+          <input v-model="form.username" class="input mb-3" :disabled="!!form.id" placeholder="如 zhangsan"/>
+        </template>
+        <div v-else class="mb-3 rounded-xl bg-ink-50 px-3 py-2 text-xs text-ink-500">
+          登录账号：学生账号（匿名展示，账号保持不变）
+        </div>
+        <p v-if="anonymousPresentation" id="student-alias-note" class="text-xs text-ink-500 leading-6 mb-3">{{ form.id ? '姓名和学号是固定的演示匿名标识，原登录账号保持有效。' : '保存后系统自动分配“同学N”和学号“N”，无需填写真实姓名或学号。请设置用于登录的账号和密码。' }}</p>
+        <label for="student-name" class="text-xs text-ink-400">{{ anonymousPresentation ? '匿名姓名' : '姓名' }}</label>
+        <input id="student-name" v-model="form.name" :readonly="anonymousPresentation" :placeholder="anonymousPresentation && !form.id ? '保存后自动分配，如 同学1' : ''" :aria-describedby="anonymousPresentation ? 'student-alias-note' : undefined" class="input mb-3" :class="anonymousPresentation ? 'bg-ink-50' : ''"/>
         <div class="grid grid-cols-2 gap-3">
-          <div><label class="text-xs text-ink-400">学号</label>
-            <input v-model="form.student_no" class="input"/></div>
+          <div><label for="student-number" class="text-xs text-ink-400">{{ anonymousPresentation ? '匿名学号' : '学号' }}</label>
+            <input id="student-number" v-model="form.student_no" :readonly="anonymousPresentation" :placeholder="anonymousPresentation && !form.id ? '保存后自动分配' : ''" :aria-describedby="anonymousPresentation ? 'student-alias-note' : undefined" class="input" :class="anonymousPresentation ? 'bg-ink-50' : ''"/></div>
           <div><label class="text-xs text-ink-400">班级</label>
             <select v-model="form.class_id" class="input">
               <option :value="null" disabled>请选择任课班级</option>
@@ -71,22 +77,32 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import Icon from '../../components/Icon.vue';
 import { api } from '../../api';
+import { useAuth } from '../../stores/auth';
+const auth = useAuth();
 const students = ref([]), classes = ref([]), loading=ref(true);
 const form = ref(null), showClass = ref(false);
 const cls = ref({ name:'', code:'' });
+// 演示匿名化开启时，列表会提供 account_label；编辑表单不得回显真实登录账号。
+const anonymousPresentation = computed(() => !!auth.user?.identity_anonymized || students.value.some(s => s.account_label));
 async function load(){loading.value=true;try{
   students.value = await api('/teacher/students');
   classes.value = await api('/auth/classes');
 }finally{loading.value=false;}}
 function newStudent(){ form.value = { username:'', password:'', name:'', student_no:'', class_id:classes.value[0]?.id, avatar:'🧑' }; }
-function edit(s){ form.value = { ...s }; }
+function edit(s){
+  const next = { ...s };
+  if (anonymousPresentation.value) delete next.username;
+  form.value = next;
+}
 async function save(){
   if(!form.value.class_id)return alert('请先创建并选择班级');
-  if(form.value.id) await api('/teacher/students/'+form.value.id,{method:'PUT',body:form.value});
-  else await api('/teacher/students',{method:'POST',body:form.value});
+  const body = { ...form.value };
+  if (anonymousPresentation.value) { delete body.name; delete body.student_no; }
+  if(form.value.id) await api('/teacher/students/'+form.value.id,{method:'PUT',body});
+  else await api('/teacher/students',{method:'POST',body});
   form.value=null; load();
 }
 async function reset(s){

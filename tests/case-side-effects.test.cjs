@@ -16,16 +16,17 @@ test('Side-effects Unity case integration',async()=>{
  const call=async(url,token,body,method)=>{const response=await fetch(base+'/api'+url,{method:method||(body?'POST':'GET'),headers:{...(token?{Authorization:'Bearer '+token}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});return{status:response.status,data:await response.json().catch(()=>null)};};
  try{
   const student=(await call('/auth/login',null,{username:'student',password})).data.token;
-  let seq=0;
+  let seq=0,firstPsid;
   const unitySid='unity-se-'+Date.now();
   const mkEvent=(type,extra)=>({schemaVersion:1,step:1,type,eventId:unitySid+':'+(++seq),sessionId:unitySid,caseId:'case-side-effects',timestamp:new Date().toISOString(),success:true,isDemo:false,maxIs_mA:10,maxIm_A:1,...extra});
 
   await test('built-in case starts without case library',async()=>{
     const r=await call('/sim/start',student,{case_id:'case-side-effects'});
     assert.equal(r.status,200);assert.equal(r.data.config.module,'side-effects');
-    assert.ok(r.data.platformSessionId);
+    assert.ok(r.data.platformSessionId);firstPsid=r.data.platformSessionId;
   });
   const psid=(await call('/sim/start',student,{case_id:'case-side-effects'})).data.platformSessionId;
+  assert.equal(db.prepare('SELECT status FROM sim_sessions WHERE id=?').get(firstPsid).status,'abandoned');
 
   await test('four-direction measurements persist with V0/VE breakdown',async()=>{
     const quad=[[1,1],[1,-1],[-1,-1],[-1,1]];

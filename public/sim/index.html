@@ -9,7 +9,8 @@ html,body{margin:0;width:100%;height:100%;background:#e6eceb;overflow:hidden;fon
 progress{width:260px;accent-color:#13756b}
 #status{white-space:pre-wrap;max-width:90vw;min-height:1.2em}
 #retrybtn{display:none;margin:4px auto 0;padding:9px 26px;border:0;border-radius:999px;background:linear-gradient(135deg,#14b8a6,#0d9488);color:#fff;font-size:14px;cursor:pointer;box-shadow:0 8px 20px -8px rgba(13,148,136,.7)}
-#fullscreen{position:absolute;right:10px;bottom:10px;width:34px;height:34px;border:1px solid #aebcba;background:white;border-radius:4px;font-size:22px;cursor:pointer}
+#fullscreen{position:absolute;right:12px;bottom:12px;z-index:100;width:40px;height:40px;border:1px solid #aebcba;background:rgba(255,255,255,.96);border-radius:8px;font-size:22px;cursor:pointer;pointer-events:auto;box-shadow:0 4px 14px rgba(0,0,0,.18)}
+#fullscreen:focus-visible{outline:3px solid #5eead4;outline-offset:2px}
 </style></head>
 <body>
 <style>@media(max-width:700px) and (orientation:portrait){#stage canvas{height:62.5vw;position:absolute;top:50%;transform:translateY(-50%)}}</style>
@@ -23,7 +24,7 @@ progress{width:260px;accent-color:#13756b}
   </div>
   <button id="fullscreen" title="全屏" aria-label="全屏">⛶</button>
 </div>
-<script src="hall-host.js"></script>
+<script src="hall-host.js?v=20260923formula4"></script>
 <script>
 const canvas=document.getElementById('unity-canvas');
 const loadingEl=document.getElementById('loading');
@@ -51,16 +52,16 @@ function loadUnity(){
   progressEl.value=0;
   setStatus('正在加载实验');
   loaderEl=document.createElement('script');
-  loaderEl.src='Build/WebGL.loader.js?v=20260920c';
+  loaderEl.src='Build/WebGL.loader.js?v=20260923formula4';
   loaderEl.onerror=()=>handleFail('实验加载脚本下载失败，可能是网络中断。');
   loaderEl.onload=()=>{
     createUnityInstance(canvas,{
-      dataUrl:'Build/WebGL.data.unityweb?v=20260920d',
-      frameworkUrl:'Build/WebGL.framework.js.unityweb?v=20260920d',
-      codeUrl:'Build/WebGL.wasm.unityweb?v=20260920d',
+      dataUrl:'Build/WebGL.data.unityweb?v=20260923formula4',
+      frameworkUrl:'Build/WebGL.framework.js.unityweb?v=20260923formula4',
+      codeUrl:'Build/WebGL.wasm.unityweb?v=20260923formula4',
       streamingAssetsUrl:'StreamingAssets',companyName:'Hall Effect Lab',productName:'Hall Experiment',productVersion:'2.3.0-web.1',
       matchWebGLToCanvasSize:true,devicePixelRatio:Math.min(window.devicePixelRatio||1,2)
-    },p=>{progressEl.value=p;}).then(instance=>{
+    },p=>{progressEl.value=p;setStatus('正在加载实验（'+Math.round(p*100)+'%）');}).then(instance=>{
       window.unityInstance=instance;window.HallHost.attach(instance);
       loadingEl.style.display='none';
       wireFullscreen();
@@ -85,13 +86,14 @@ retryBtn.addEventListener('click',()=>{attempt=0;loadUnity();});
 function wireFullscreen(){
   const stage=document.getElementById('stage');const fsBtn=document.getElementById('fullscreen');
   const isFs=()=>!!(document.fullscreenElement||document.webkitFullscreenElement);
-  const enterFs=()=>{const el=stage;(el.requestFullscreen||el.webkitRequestFullScreen).call(el);};
-  const leaveFs=()=>{const d=document;(d.exitFullscreen||d.webkitExitFullscreen).call(d);};
-  fsBtn.onclick=()=>{isFs()?leaveFs():enterFs();};
+  const enterFs=()=>{const el=stage,fn=el.requestFullscreen||el.webkitRequestFullScreen;if(fn)return Promise.resolve(fn.call(el));return Promise.reject(new Error('fullscreen unavailable'));};
+  const leaveFs=()=>{const d=document,fn=d.exitFullscreen||d.webkitExitFullscreen;if(fn)return Promise.resolve(fn.call(d));return Promise.reject(new Error('fullscreen unavailable'));};
+  fsBtn.onclick=()=>{(isFs()?leaveFs():enterFs()).catch(()=>{setStatus('浏览器未授予全屏权限，可使用 Esc 或浏览器菜单退出。','#9a6a1a');}).finally(syncFs);};
   const syncFs=()=>{const on=isFs();fsBtn.textContent=on?'✕':'⛶';fsBtn.title=on?'退出全屏（Esc）':'全屏';};
   document.addEventListener('fullscreenchange',syncFs);document.addEventListener('webkitfullscreenchange',syncFs);
+  syncFs();
 }
 
 loadUnity();
 </script>
-</body></html>
+</body></html>\n

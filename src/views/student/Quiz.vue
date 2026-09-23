@@ -145,6 +145,13 @@ async function submit(){
   result.value.detail.forEach(x=>qmap.value[x.id]=x);
   phase.value='result';
   attempts.value = await api('/resources/attempts');
+  }catch(e){
+    // 到期自动提交或网络失败时仍留在答题页，恢复计时器以便用户重试。
+    if(phase.value==='take'&&attemptId.value&&remain.value>0){
+      clearInterval(timer);
+      timer=setInterval(()=>{remain.value=Math.max(0,Math.ceil((Date.parse(deadline)-Date.now())/1000));if(remain.value<=0){clearInterval(timer);submit();}},1000);
+    }
+    return;
   }finally{submitting.value=false;}
 }
 function display(id){ const a=ans.value[id]; return Array.isArray(a)?a.sort().join(''):(a??'未作答'); }

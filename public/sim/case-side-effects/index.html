@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>副效应与误差修正（占位案例）</title>
+<title>副效应与误差修正 · 四方向测量交互实验</title>
 <style>
   :root{--brand:#0d9488;--brand2:#078775;--ink:#26334a;--mut:#7e92ab;--line:#e9edf3;--bg:#eef3f7}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -32,7 +32,7 @@
   .b-g{background:#f5f7fa;color:#485a74;border:1px solid var(--line)}
   .sel{outline:3px solid rgba(13,148,136,.35)}
   .ops{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
-  .read{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center}
+  .read{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;text-align:center}
   .read .c{border-radius:14px;padding:9px 4px;background:#f5f7fa}
   .read .c .k{font-size:10px;color:var(--mut)}
   .read .c .v{font-size:15px;font-weight:800;margin-top:3px}
@@ -49,14 +49,18 @@
   details ul{margin:8px 0;padding-left:18px;max-height:170px;overflow:auto}
   details li{margin:3px 0}
   .note{font-size:11px;color:var(--mut);margin-top:8px;line-height:1.6}
+  #fullscreen{position:fixed;right:14px;top:14px;z-index:100;width:38px;height:38px;border:1px solid #d6e3e3;border-radius:10px;background:#fff;color:#17665e;font-size:22px;cursor:pointer;box-shadow:0 5px 16px rgba(15,60,80,.16)}
+  #fullscreen:focus-visible{outline:3px solid #5eead4;outline-offset:2px}
+  @media(max-width:900px){.read{grid-template-columns:repeat(3,1fr)}}
   @media(max-width:760px){.grid{grid-template-columns:1fr}.read,.quad{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
 <body>
+<button id="fullscreen" title="全屏" aria-label="全屏">⛶</button>
 <div id="app">
   <header class="p">
     <div class="t">副效应与误差修正
-      <span class="badge">占位案例 · Unity Build 待接入</span>
+      <span class="badge">四方向测量交互实验</span>
       <span id="webglWarn" class="webgl">当前浏览器可能不支持 WebGL</span>
     </div>
     <div class="sub" id="statusLine">正在初始化通信…</div>
@@ -79,8 +83,16 @@
         <input id="r0" type="range" min="0" max="0.5" step="0.005" value="0.05" aria-label="电极偏移">
       </div>
       <div class="row">
-        <div class="lab"><span>厄廷豪森系数 kE（温差）</span><b id="vkE">0.0050</b></div>
-        <input id="kE" type="range" min="0" max="0.02" step="0.0005" value="0.005" aria-label="厄廷豪森系数">
+        <div class="lab"><span>厄廷豪森附加电压有效系数 kE</span><b id="vkE">0.0050</b></div>
+        <input id="kE" type="range" min="0" max="0.02" step="0.0005" value="0.005" aria-label="厄廷豪森附加电压有效系数">
+      </div>
+      <div class="row">
+        <div class="lab"><span>能斯特有效系数 kN</span><b id="vkN">0.021</b></div>
+        <input id="kN" type="range" min="-0.1" max="0.1" step="0.001" value="0.021" aria-label="能斯特有效系数">
+      </div>
+      <div class="row">
+        <div class="lab"><span>里纪–勒杜克有效系数 kRL</span><b id="vkRL">0.008</b></div>
+        <input id="kRL" type="range" min="-0.1" max="0.1" step="0.001" value="0.008" aria-label="里纪–勒杜克有效系数">
       </div>
 
       <h3 style="margin-top:16px">测量方向切换</h3>
@@ -111,6 +123,8 @@
         <div class="c"><div class="k">理想 VH</div><div class="v" id="rVH" style="color:#0d9488">—</div></div>
         <div class="c"><div class="k">不等位 V0</div><div class="v" id="rV0" style="color:#d97706">—</div></div>
         <div class="c"><div class="k">厄廷豪森 VE</div><div class="v" id="rVE" style="color:#e11d48">—</div></div>
+        <div class="c"><div class="k">能斯特 VN</div><div class="v" id="rVN" style="color:#7c3aed">—</div></div>
+        <div class="c"><div class="k">里纪–勒杜克 VRL</div><div class="v" id="rVRL" style="color:#db2777">—</div></div>
         <div class="c"><div class="k">实测 Vmeasured</div><div class="v" id="rT" style="color:#0284c7">—</div></div>
       </div>
 
@@ -128,7 +142,7 @@
         <div class="c" style="background:#fffbeb"><div class="k">残留 VE</div><div class="v" id="cVE" style="color:#d97706">—</div></div>
         <div class="c" style="background:#ecfdf5"><div class="k">理想 VH</div><div class="v" id="cIdeal" style="color:#0d9488">—</div></div>
       </div>
-      <div class="note">对称法消除 V0；VE 与 VH 换向规律相同而残留，已知 kE 时减去 VE 得理想 VH。</div>
+      <div class="note">四方向组合消除 V0、VN、VRL；VE 与 VH 换向规律相同而残留，需用已知有效系数 kE 独立确定 VE 后再减去，才能得到理想 VH。</div>
     </section>
   </div>
 
@@ -140,13 +154,13 @@
   </details>
 </div>
 
-<script src="../hall-host.js"></script>
+<script src="../hall-host.js?v=20260923formula4"></script>
 <script>
 /* ===== 占位模拟设备：实现与真实 Unity WebBridge 相同的消息契约 =====
    真实 Build 就绪后，本面板替换为 Unity 实例，hall-host 与事件格式不变。 */
 const dmm = 0.0005;                 // 样品厚度 0.5 mm（m）
 const RH = -2.7e-4;                  // 霍尔系数 m³/C（参考示例，非标定）
-let IS=5, IM=0.8, r0=0.05, kE=0.005; // 滑块参数
+let IS=5, IM=0.8, r0=0.05, kE=0.005, kN=0.021, kRL=0.008; // 滑块参数；kN/kRL 单位 mV/T
 let sI=1, sB=1;                      // 方向
 let powered=false, finished=false, groups=0, sessionId='', seq=0, started=0;
 let slotValues={1:null,2:null,3:null,4:null}, currentGid='G1';
@@ -161,14 +175,15 @@ function readingAt(si,sb){
   const VH=RH*sIS*sB_/dmm;
   const V0=r0*sIS;
   const VE=kE*sIS*sB_;
-  return {VH,V0,VE,total:VH+V0+VE};
+  const VN=kN*sB_, VRL=kRL*sB_;
+  return {VH,V0,VE,VN,VRL,total:VH+V0+VE+VN+VRL};
 }
 function stateSnapshot(extra){
   const r=readingAt(sI,sB);
   return Object.assign({powered,circuitValid:true,stable:true,finished,
-    pendingDirections:Object.values(slotValues).filter(v=>v===null&&false).length,completeGroups:groups,
+    pendingDirections:Object.values(slotValues).filter(v=>v===null).length,completeGroups:groups,
     IS_mA:IS*sI,IM_A:IM*sB,B_T:Bof()*sB,rawVoltage_mV:powered?r.total:0,
-    VH_mV:r.VH,V0_mV:r.V0,VE_mV:r.VE},extra||{});
+    VH_mV:r.VH,V0_mV:r.V0,VE_mV:r.VE,VN_mV:r.VN,VRL_mV:r.VRL},extra||{});
 }
 function emit(type,code,detail,success,extra,topLevel){
   const e={schemaVersion:1,step:1,type,
@@ -205,6 +220,8 @@ function handle(method,p){
       else if(p.name==='IM_A')IM=clamp(p.value,0,1);
       else if(p.name==='r0')r0=clamp(p.value,0,.5);
       else if(p.name==='kE')kE=clamp(p.value,0,.02);
+      else if(p.name==='kN')kN=clamp(p.value,-.1,.1);
+      else if(p.name==='kRL')kRL=clamp(p.value,-.1,.1);
       else if(p.name==='power'){powered=p.value===1;}
       emit('OnCommandResult','SetParameter',JSON.stringify(p),true);
       addOp('参数调整 '+p.name+'='+p.value);render();
@@ -238,15 +255,17 @@ function recordCurrent(){
   const measurement={groupId:currentGid,timestamp:new Date().toISOString(),slot,
     isDirection:sI,imDirection:sB,voltageDirection:1,
     IS_mA:IS*sI,IM_A:IM*sB,isSetpoint_mA:IS,imSetpoint_A:IM,B_T:Bof()*sB,
-    rawVoltage_mV:r.total,VH_mV:r.VH,normalizedVH_mV:r.VH,V0_mV:r.V0,VE_mV:r.VE,
+    rawVoltage_mV:r.total,VH_mV:r.VH,normalizedVH_mV:r.VH,V0_mV:r.V0,VE_mV:r.VE,VN_mV:r.VN,VRL_mV:r.VRL,
     groupComplete,row:null};
   emit('OnMeasureData','record','',true,null,{measurement});
   addOp((wasFilled?'更新':'记录')+' 槽位'+slot+' = '+r.total.toFixed(3)+' mV');
-  if(groupComplete){groups++;computeCorrection();}
+  if(groupComplete && !wasFilled && groups===0){groups++;computeCorrection();}
+  else if(groupComplete){computeCorrection();}
   render();
 }
 function autoFour(){
   if(finished){showError('实验已结束，请清空重测');return;}
+  if(groups>0){showError('本组已完成，请清空重测');return;}
   if(!powered){showError('请先开机，再执行四方向对称测量');emit('OnAbnormalEvent','CIRCUIT_NOT_READY','未通电',false);return;}
   clearError();
   const quad=[[1,1],[1,-1],[-1,-1],[-1,1]];
@@ -256,7 +275,7 @@ function autoFour(){
     const measurement={groupId:currentGid,timestamp:new Date().toISOString(),slot,
       isDirection:si,imDirection:sb,voltageDirection:1,
       IS_mA:IS*si,IM_A:IM*sb,isSetpoint_mA:IS,imSetpoint_A:IM,B_T:Bof()*sb,
-      rawVoltage_mV:r.total,VH_mV:r.VH,normalizedVH_mV:r.VH,V0_mV:r.V0,VE_mV:r.VE,
+      rawVoltage_mV:r.total,VH_mV:r.VH,normalizedVH_mV:r.VH,V0_mV:r.V0,VE_mV:r.VE,VN_mV:r.VN,VRL_mV:r.VRL,
       groupComplete:slot===4,row:null};
     emit('OnMeasureData','record','',true,null,{measurement});
   });
@@ -280,7 +299,7 @@ function finishExp(){
   powered=false;finished=true;
   const V=slotValues;
   const report={module:'side-effects',completedAt:new Date().toISOString(),
-    params:{IS_mA:IS,IM_A:IM,B_T:Bof(),RH,d_mm:0.5,r0,kE},
+    params:{IS_mA:IS,IM_A:IM,B_T:Bof(),RH,d_mm:0.5,r0,kE,kN_mV_T:kN,kRL_mV_T:kRL},
     forwardReadings:{V1:V[1],V3:V[3]},reverseReadings:{V2:V[2],V4:V[4]},
     readings:{V1:V[1],V2:V[2],V3:V[3],V4:V[4]},
     beforeCorrection_mV:V[1],correctedHall_mV:window._corr,
@@ -297,6 +316,9 @@ function render(){
   document.getElementById('vIM').textContent=IM.toFixed(2)+' A';
   document.getElementById('vr0').textContent=r0.toFixed(3)+' Ω';
   document.getElementById('vkE').textContent=kE.toFixed(4);
+  document.getElementById('vkN').textContent=kN.toFixed(3);
+  document.getElementById('vkRL').textContent=kRL.toFixed(3);
+  for(const [id,value] of [['IS',IS],['IM',IM],['r0',r0],['kE',kE],['kN',kN],['kRL',kRL]]) document.getElementById(id).value=value;
   ['sIp','sIn','sBp','sBn'].forEach(id=>document.getElementById(id).classList.remove('sel'));
   if(sI===1)document.getElementById('sIp').classList.add('sel');else document.getElementById('sIn').classList.add('sel');
   if(sB===1)document.getElementById('sBp').classList.add('sel');else document.getElementById('sBn').classList.add('sel');
@@ -305,6 +327,8 @@ function render(){
   document.getElementById('rVH').textContent=f3(r.VH);
   document.getElementById('rV0').textContent=f3(r.V0);
   document.getElementById('rVE').textContent=f3(r.VE);
+  document.getElementById('rVN').textContent=f3(r.VN);
+  document.getElementById('rVRL').textContent=f3(r.VRL);
   document.getElementById('rT').textContent=f3(r.total);
   ['V1','V2','V3','V4'].forEach((k,i)=>{
     const q=document.getElementById('q'+k),v=slotValues[i+1];
@@ -314,8 +338,10 @@ function render(){
   document.getElementById('cCorr').textContent=window._corr==null?'—':f3(window._corr);
   document.getElementById('cVE').textContent=window._VEref==null?'—':f3(window._VEref);
   document.getElementById('cIdeal').textContent=window._ideal==null?'—':f3(window._ideal);
+  const measuredDirections=Object.values(slotValues).filter(v=>v!==null).length;
   document.getElementById('statusLine').textContent=
-    (finished?'实验已结束并保存':(powered?'已通电，可记录读数':'未通电（可先调参数观察）'))+' · 完整组 '+groups+'/4';
+    (finished?'实验已结束并保存':(powered?'已通电，可记录读数':'未通电（可先调参数观察）'))+
+    ' · 完整组 '+groups+' · 本组方向 '+measuredDirections+'/4';
   const ul=document.getElementById('opLog');
   ul.innerHTML=opList.length?'':'<li>暂无操作</li>';
   if(opList.length)ul.innerHTML=opList.slice(-40).map(o=>'<li>'+o.time+' · '+o.text+'</li>').join('');
@@ -330,12 +356,29 @@ function detectWebGL(){
   }catch(e){document.getElementById('webglWarn').style.display='inline-block';}
 }
 
+function bindRange(id,name,assign){
+  const el=document.getElementById(id); if(!el)return;
+  el.addEventListener('input',()=>{const value=Number(el.value);assign(value);addOp('参数调整 '+name+'='+value);render();});
+}
+bindRange('IS','IS_mA',v=>IS=clamp(v,0,10));
+bindRange('IM','IM_A',v=>IM=clamp(v,0,1));
+bindRange('r0','r0',v=>r0=clamp(v,0,.5));
+bindRange('kE','kE',v=>kE=clamp(v,0,.02));
+bindRange('kN','kN',v=>kN=clamp(v,-.1,.1));
+bindRange('kRL','kRL',v=>kRL=clamp(v,-.1,.1));
+const fsButton=document.getElementById('fullscreen');
+const fullscreenState=()=>!!(document.fullscreenElement||document.webkitFullscreenElement);
+async function syncFullscreen(){const on=fullscreenState();fsButton.textContent=on?'✕':'⛶';fsButton.title=on?'退出全屏（Esc）':'全屏';fsButton.setAttribute('aria-label',fsButton.title);}
+fsButton.addEventListener('click',async()=>{try{if(fullscreenState())await (document.exitFullscreen?.()||document.webkitExitFullscreen?.());else await (document.documentElement.requestFullscreen?.()||document.documentElement.webkitRequestFullscreen?.());}catch{addOp('浏览器拒绝全屏请求，请使用浏览器菜单或 Esc 退出');}finally{syncFullscreen();}});
+document.addEventListener('fullscreenchange',syncFullscreen);document.addEventListener('webkitfullscreenchange',syncFullscreen);
+
 /* 启动：attach 模拟实例，再由“设备”发 OnReady（与真实 WebBridge.Start 一致） */
 newSession();
 window.HallHost.attach(mockInstance);
 detectWebGL();
 emit('OnReady','ready','',true);
 render();
+syncFullscreen();
 </script>
 </body>
 </html>

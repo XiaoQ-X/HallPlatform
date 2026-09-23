@@ -12,7 +12,14 @@
     </div>
 
     <!-- 无任何学生：可操作空状态 -->
-    <div v-if="!rows.length" class="card p-10 text-center">
+    <div v-if="loadError" class="card p-10 text-center">
+      <div class="text-4xl mb-3">⚠️</div>
+      <div class="font-bold text-ink-800 mb-2">实验进度加载失败</div>
+      <p class="text-sm text-rose-600 mb-5">{{ loadError }}</p>
+      <button class="btn-primary" @click="load">重新加载</button>
+    </div>
+    <div v-else-if="loading" class="card p-10 text-center text-sm text-ink-400">正在加载学生实验进度…</div>
+    <div v-else-if="!rows.length" class="card p-10 text-center">
       <div class="text-5xl mb-3">🧑‍🏫</div>
       <div class="font-bold text-ink-800 mb-1">还没有可管理的学生</div>
       <p class="text-sm text-ink-400 mb-5">请先在「学生管理」中创建班级与学生账号，再查看副效应实验进度。</p>
@@ -69,6 +76,7 @@ import Icon from '../../components/Icon.vue';
 import { api } from '../../api';
 
 const rows = ref([]);
+const loading = ref(true), loadError = ref('');
 const active = ref('all');
 const STATUS = {
   not_started: { label: '未开始', cls: 'bg-ink-100 text-ink-500' },
@@ -90,5 +98,11 @@ const countOf = k => k==='all' ? rows.value.length : rows.value.filter(s=>s.stat
 const filtered = computed(()=> active.value==='all' ? rows.value : rows.value.filter(s=>s.status===active.value));
 const f = v => Number.isFinite(v) ? Number(v).toFixed(2) : '—';
 
-onMounted(async()=>{ try{ rows.value = await api('/teacher/side-effects'); }catch{ rows.value=[]; } });
+async function load(){
+  loading.value=true; loadError.value='';
+  try{ rows.value = await api('/teacher/side-effects'); }
+  catch(e){ rows.value=[]; loadError.value=e.message||'请求失败，请稍后重试'; }
+  finally{ loading.value=false; }
+}
+onMounted(load);
 </script>

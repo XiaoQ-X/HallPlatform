@@ -7,3 +7,17 @@ dist/
 work/
 *.log
 .env
+
+# Unity source belongs in Git; editor caches and generated builds do not.
+unity/**/[Ll]ibrary/
+unity/**/[Tt]emp/
+unity/**/[Oo]bj/
+unity/**/[Ll]ogs/
+unity/**/[Uu]ser[Ss]ettings/
+unity/**/[Bb]uild/
+unity/**/[Bb]uilds/
+unity/**/.vs/
+unity/**/*.csproj
+unity/**/*.sln
+unity/**/*.slnx
+unity/**/*.user

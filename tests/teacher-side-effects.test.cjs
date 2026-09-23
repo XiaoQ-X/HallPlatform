@@ -57,13 +57,41 @@ test('Teacher side-effects management, permissions and audit',async()=>{
     const r=await call('/sim/side-effects',student,{
       title:'副效应记录',conclusion,
       params:{I_mA:IS,B_T:B,RH,d_mm:0.5,r0,kE},
-      readings:{V1:1,V2:2,V3:3,V4:4},
+      readings:{V1:-0.82,V2:1.32,V3:-1.32,V4:0.82},
       result:{idealVH_mV:-1.08,residualVE_mV:0.01,correctedHall_mV:-1.07}});
     assert.equal(r.status,200);
     const list=(await call('/teacher/side-effects',teacher)).data.find(x=>x.id===studentId);
     assert.equal(list.status,'submitted');
     const detail=(await call('/teacher/side-effects/student/'+studentId,teacher)).data;
     assert.equal(detail.records[0].conclusion,conclusion);
+  });
+
+  await test('server recomputes side-effects formula and rejects forged readings',async()=>{
+    const r=await call('/sim/side-effects',student,{
+      title:'篡改读数',conclusion:'这是用于验证服务端复算的无效记录。',
+      params:{I_mA:IS,B_T:B,RH,d_mm:0.5,r0,kE},
+      readings:{V1:0,V2:0,V3:0,V4:0},
+      result:{idealVH_mV:0,residualVE_mV:0,correctedHall_mV:0}});
+    assert.equal(r.status,400);
+  });
+
+  await test('server verifies four transverse-effect components and keeps VN/VRL out of Vcorr',async()=>{
+    const r=await call('/sim/side-effects',student,{
+      title:'四种横向效应复核',conclusion:'霍尔、厄廷豪森、能斯特和里纪勒杜克是四种横向效应；四方向修正消除 V0、VN、VRL。',
+      params:{I_mA:IS,B_T:B,RH,d_mm:0.5,r0,kE,kN_mV_T:0.021,kRL_mV_T:0.008},
+      readings:{V1:-0.8084,V2:1.3084,V3:-1.3316,V4:0.8316},
+      result:{idealVH_mV:-1.08,residualVE_mV:0.01,correctedHall_mV:-1.07}
+    });
+    assert.equal(r.status,200);
+    const saved=db.prepare('SELECT params_json,result_json FROM side_effect_records WHERE id=?').get(r.data.id);
+    assert.equal(JSON.parse(saved.params_json).kN_mV_T,0.021);
+    assert.equal(JSON.parse(saved.params_json).kRL_mV_T,0.008);
+    assert.equal(JSON.parse(saved.result_json).correctedHall_mV,-1.07);
+  });
+
+  await test('server rejects incomplete side-effects submission',async()=>{
+    const r=await call('/sim/side-effects',student,{title:'不完整记录',params:{I_mA:IS,B_T:B},readings:{V1:1},result:{}});
+    assert.equal(r.status,400);
   });
 
   await test('grading persists, sets graded and writes audit',async()=>{

@@ -3,7 +3,7 @@
     <!-- 移动端遮罩 -->
     <div v-if="mobileOpen" class="fixed inset-0 bg-black/40 z-30 lg:hidden" @click="mobileOpen=false"></div>
     <!-- 侧边导航（移动端抽屉，桌面固定） -->
-    <aside :class="['glass fixed lg:sticky top-0 h-screen w-64 flex flex-col p-4 rounded-r-[2rem] z-40 transition-all duration-300',
+    <aside v-if="!standaloneSimulation" :class="['glass fixed lg:sticky top-0 h-screen w-64 flex flex-col p-4 rounded-r-[2rem] z-40 transition-all duration-300',
       mobileOpen?'translate-x-0':'-translate-x-full lg:translate-x-0', collapsed?'lg:w-24':'']">
       <div class="flex items-center gap-3 px-2 py-2">
         <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-brand-400 to-brand-700 flex items-center justify-center text-white shadow-glow">
@@ -44,7 +44,7 @@
 
     <!-- 主区域 -->
     <div class="flex-1 min-w-0 flex flex-col">
-      <header class="sticky top-0 z-30 px-4 lg:px-6 py-3 glass flex items-center gap-3 lg:gap-4 rounded-b-[1.6rem]">
+      <header v-if="!standaloneSimulation" class="sticky top-0 z-30 px-4 lg:px-6 py-3 glass flex items-center gap-3 lg:gap-4 rounded-b-[1.6rem]">
         <button class="lg:hidden w-10 h-10 rounded-2xl bg-white/80 border border-ink-100 flex items-center justify-center text-ink-700 shrink-0" @click="mobileOpen=true" aria-label="打开导航">
           <Icon name="menu" :size="20" />
         </button>
@@ -88,7 +88,17 @@
         </div>
       </header>
 
-      <main class="p-4 lg:p-6 flex-1"><InsecureContextNotice/><router-view /></main>
+      <main :class="[standaloneSimulation ? 'p-0' : 'p-4 lg:p-6', 'flex-1']">
+        <InsecureContextNotice v-if="!standaloneSimulation"/>
+        <router-view v-slot="{ Component }">
+          <Suspense>
+            <component :is="Component" />
+            <template #fallback>
+              <div class="card min-h-48 flex items-center justify-center text-sm text-ink-400">正在加载页面…</div>
+            </template>
+          </Suspense>
+        </router-view>
+      </main>
     </div>
     <ProfileModal v-if="showProfile" :user="auth.user" @close="showProfile=false"/>
   </div>
@@ -106,6 +116,7 @@ import { api } from '../api';
 const auth = useAuth();
 const route = useRoute(), router = useRouter();
 const collapsed = ref(false), showProfile = ref(false), mobileOpen = ref(false);
+const standaloneSimulation = computed(() => route.path === '/sim/lab' && route.query.case === 'microscopic');
 const toggleCollapse = () => collapsed.value = !collapsed.value;
 
 const groups = [
@@ -119,7 +130,7 @@ const groups = [
     { to: '/resources/ideology', label: '思政素材库', icon: 'star' },
     { to: '/resources/quiz', label: '思考题 / 自测题', icon: 'help' },
     { to: '/resources/projects', label: '自主探究课题包', icon: 'folder' },
-    { to: '/resources/downloads', label: '软件下载中心', icon: 'download' }
+    { to: '/resources/downloads', label: '离线工具（可选）', icon: 'download' }
   ]},
   { title: '数据处理工坊', items: [
     { to: '/workshop/cleaning', label: '数据清洗台', icon: 'filter' },
@@ -134,7 +145,7 @@ const groups = [
 
 const titleMap = {
   '/': '学习首页', '/sim/lab': '霍尔效应基础实验', '/sim/side-effects': '副效应与误差修正', '/grades':'我的成绩',
-  '/resources/cases': '应用案例库', '/resources/downloads': '软件下载中心', '/resources/ideology': '思政素材库',
+  '/resources/cases': '应用案例库', '/resources/downloads': '离线工具（可选）', '/resources/ideology': '思政素材库',
   '/resources/quiz': '思考题 / 自测题', '/resources/projects': '自主探究课题包',
   '/workshop/cleaning': '数据清洗台', '/workshop/uncertainty': '不确定度计算器',
   '/workshop/analysis': '多元分析工具', '/peer/works': '同伴互评', '/peer/appeals': '反馈与申诉'

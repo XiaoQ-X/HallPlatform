@@ -2,7 +2,7 @@
 
 本目录 `public/sim/case-side-effects/` 是**独立案例目录**，不覆盖基础实验（`public/sim/index.html` 与 `public/sim/Build/`）。
 
-当前 `index.html` 是**占位入口**：它复用平台通信层 `../hall-host.js`，用一个模拟设备走通完整事件流，**不包含、也不伪造 Unity 构建产物**。真实 Unity WebGL Build 就绪后，按本文档实现消息并替换占位面板，通信链路、事件格式与服务器保存逻辑保持不变。
+当前 `index.html` 是**可直接用于教学验收的浏览器参考案例**：它复用平台通信层 `../hall-host.js`，以确定性测量模型走通完整事件流，便于在低性能设备上完成公式教学与回归测试。基础三维 Unity WebGL 构建位于 `public/sim/Build/`，已接入同一通信协议；Unity 侧也输出四种横向效应的分项数据。若将来制作独立的“副效应”三维场景，只需替换本目录入口，通信链路、事件格式与服务器保存逻辑保持不变。
 
 
 
@@ -194,7 +194,7 @@ Unity             --window.dispatchEvent(CustomEvent 'hall-event')-->        hal
 | `OnAbnormalEvent`      | 异常 / 非法操作                        | 平台记录异常（如 `CIRCUIT_NOT_READY`、`INVALID_INIT`、`EXPERIMENT_INCOMPLETE`） |
 | `OnExperimentComplete` | 结束实验                             | 平台标记会话完成并 flush                                                      |
 
-### 3.3 WebMeasurement（需新增 V0/VE 分项）
+### 3.3 WebMeasurement（需新增 V0/VE/VN/VRL 分项）
 
 基础实验现有字段：
 
@@ -217,12 +217,18 @@ rawVoltage\_mV, VH\_mV, normalizedVH\_mV, groupComplete, row
 
 &#x20; "V0\_mV": 0.250,
 
-&#x20; "VE\_mV": 0.010
+&#x20; "VE\_mV": 0.010,
+
+&#x20; "VN\_mV": 0.008,
+
+&#x20; "VRL\_mV": 0.003,
+
+&#x20; "noise\_mV": 0.000
 
 }
 ```
 
-（如需完整教学分解，可再附 `VN_mV / VR_mV / noise_mV`，平台会原样保存在事件 payload 中。）
+平台会把四种横向效应和仪器噪声原样保存在事件 payload 中，便于教师复核每一条读数。
 
 > 说明：
 >
@@ -339,9 +345,10 @@ rawVoltage\_mV, VH\_mV, normalizedVH\_mV, groupComplete, row
 
   * `VE = kE·I·B`（随 I・B 换向，与 VH 同规律）
 
-  * `Vmeasured = VH + V0 + VE`
+  * `V⊥ = VH + VE + VN + VRL`（霍尔、厄廷豪森、能斯特、里纪–勒杜克四种横向磁效应）
+  * `Vmeasured = V⊥ + V0 + Voffset`（V0 为接触偏移，Voffset 为仪器零点）
 
-* **四方向对称法** `(V1−V2+V3−V4)/4` 消除 V0（及固定零点），但 **VE 与 VH 换向规律相同、无法靠换向消除**，修正值 = VH + VE；只有已知 kE（或温差参数）才能减去 VE 得理想 VH。
+* **四方向对称法** `(V1−V2+V3−V4)/4` 消除 `V0`、`VN`、`VRL` 与固定零点（它们分别只随 `I`、`B` 或固定偏置换向），但 **VE 与 VH 换向规律相同、无法靠换向消除**，修正值 = `VH + VE`；只有已知 `kE`（或温差参数）才能减去 `VE` 得理想 `VH`。
 
 ### 四方向 slot 对照
 
@@ -360,9 +367,9 @@ rawVoltage\_mV, VH\_mV, normalizedVH\_mV, groupComplete, row
 
 ***
 
-## 5. 真实 Build 放置清单（待提供，当前缺失）
+## 5. Unity Build 放置清单与当前状态
 
-真实 Unity 副效应构建需输出到本目录，例如：
+当前基础 Unity WebGL 构建已经输出到 `public/sim/Build/`，由 `public/sim/index.html` 加载；本目录的参考案例保留为可回归的轻量入口。若提供独立副效应场景，可按下列结构放置：
 
 
 
@@ -382,16 +389,16 @@ public/sim/case-side-effects/
 &#x20;   WebGL.wasm.unityweb
 ```
 
-Unity 侧改动要点（C#）：
+Unity 侧实现要点（C#，当前构建已完成）：
 
 
 
-1. `WebBridge.cs`：给 `WebMeasurement` 增加 `V0_mV / VE_mV`（建议 `WebState` 同步增加分项）；`SetParameter` 支持 `r0 / kE`。
+1. `WebBridge.cs`：给 `WebMeasurement` 增加 `V0_mV / VE_mV / VN_mV / VRL_mV / noise_mV`（建议 `WebState` 同步增加分项）；`SetParameter` 支持 `r0 / kE / kN / kRL`。
 
-2. 读数合成接入副效应模型（不等位、厄廷豪森），并在 `RecordMeasurement` 输出分项。
+2. 读数合成接入四种横向效应模型（霍尔、厄廷豪森、能斯特、里纪–勒杜克）及不等位/噪声项，并在 `RecordMeasurement` 输出分项。
 
 3. 结束时在 `state.report` 输出第 3.5 节汇总。
 
 4. 用 WebGL 构建入口 `HallLab.Editor.WebPlayerBuild.Build` 重新构建后放入上述目录。
 
-**在真实 Build 提供前，不得在本目录放置或宣称已存在 Build 文件。**
+当前构建验收记录见仓库根目录 `公式核对报告.md`；发布前仍需重新执行 Unity WebGL 构建并核对四个产物哈希。

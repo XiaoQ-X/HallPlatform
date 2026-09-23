@@ -7,7 +7,7 @@ const target = path.resolve(process.argv[2] || path.join(root, 'work', 'release-
 if (fs.existsSync(target) || fs.existsSync(target + '.tar.gz')) throw Error('Release destination already exists');
 fs.mkdirSync(target, { recursive: true });
 // Explicit allowlist excludes databases, uploads, credentials, caches and test output.
-for (const name of ['server', 'shared', 'dist', 'public/sim', 'deploy', 'package.json', 'pnpm-lock.yaml', 'create-teacher.js', 'scripts/backup.cjs']) {
+for (const name of ['server', 'shared', 'dist', 'public/sim', 'deploy', 'package.json', 'pnpm-lock.yaml', 'create-teacher.js', 'scripts/backup.cjs', 'scripts/anonymize-demo-data.cjs']) {
   const dest = path.join(target, name);
   fs.mkdirSync(path.dirname(dest), { recursive: true });
   fs.cpSync(path.join(root, name), dest, { recursive: true });

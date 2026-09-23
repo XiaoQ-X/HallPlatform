@@ -5,7 +5,7 @@ module.exports=db=>{
     for(const table of ['cases','ideology','questions','quizzes','projects','rubrics']){db.exec(`ALTER TABLE ${table} ADD COLUMN owner_id INTEGER REFERENCES users(id)`);db.prepare(`UPDATE ${table} SET owner_id=?`).run(first);}
     const tasks=[
       ['经典霍尔响应与开关阈值的区别','固定IS，改变IM，观察连续霍尔电压。开关阶跃需要额外的阈值电路，本实验不模拟施密特触发器。'],
-      ['电流传感器原理类比','固定IS，在0至1A范围扫描励磁电流IM，拟合VH与IM关系；IM在此作为被测电流产生磁场的类比量。'],
+      ['电流传感器原理类比','固定IS，在0至1A范围扫描励磁电流IM；磁芯未饱和时VH与IM可近似线性，接近饱和区应观察并说明偏离；IM在此作为被测电流产生磁场的类比量。'],
       ['磁场方向与霍尔电压','完成四方向测量，观察电压符号变化。三路传感器及电机换相时序属于资料拓展，本实验不模拟电机。'],
       ['运动电动势资料对比','本实验仅验证经典霍尔电压随磁场的关系。电磁流量计基于运动电动势E=BDv，改变磁场不等于改变流速。'],
       ['经典霍尔与量子霍尔资料对比','测量经典霍尔电压，区分霍尔电阻VH/IS与霍尔系数VH*d/(IS*B)。量子平台须查阅低温二维电子气资料，本实验不模拟量子效应。']

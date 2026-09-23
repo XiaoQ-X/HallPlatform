@@ -18,7 +18,13 @@ import {ref,computed,onMounted} from 'vue';import Icon from '../../components/Ic
 import HallUncertainty from '../../components/HallUncertainty.vue';
 const title=ref(''),quantity=ref('霍尔电压'),unit=ref('mV'),instrument=ref(''),vals=ref([null,null]),delta=ref(0),dist=ref('uniform'),kf=ref(2),history=ref([]),saving=ref(false);
 const sessions=ref([]),sessionId=ref(null),repeatSets=ref([]),repeatKey=ref(''),source=ref(null),hallPanel=ref(null);
-async function importRepeats(){if(!sessionId.value){repeatSets.value=[];source.value=null;return;}const d=await api('/workshop/session-points/'+sessionId.value);const groups=new Map();for(const g of d.groups.filter(g=>g.decision!=='exclude')){const key=`${g.series_id} / IS=${Math.abs(g.IS_mA).toFixed(3)} mA / IM=${Math.abs(g.IM_A).toFixed(4)} A`;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(g);}repeatSets.value=[...groups].map(([key,rows])=>({key,rows}));repeatKey.value=repeatSets.value[0]?.key||'';source.value={session_id:sessionId.value,cleaningVersion:d.version};selectRepeats();}
+let importSeq=0;
+async function importRepeats(){
+  const seq=++importSeq, selected=sessionId.value;
+  if(!selected){repeatSets.value=[];repeatKey.value='';source.value=null;vals.value=[];return;}
+  const d=await api('/workshop/session-points/'+selected);
+  if(seq!==importSeq||sessionId.value!==selected)return;
+  const groups=new Map();for(const g of d.groups.filter(g=>g.decision!=='exclude')){const key=`${g.series_id} / IS=${Math.abs(g.IS_mA).toFixed(3)} mA / IM=${Math.abs(g.IM_A).toFixed(4)} A`;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(g);}repeatSets.value=[...groups].map(([key,rows])=>({key,rows}));repeatKey.value=repeatSets.value[0]?.key||'';source.value={session_id:selected,cleaningVersion:d.version};selectRepeats();}
 function selectRepeats(){const group=repeatSets.value.find(g=>g.key===repeatKey.value);vals.value=group?group.rows.map(g=>g.normVH_mV??g.VH_mV):[];source.value={...source.value,measurement_ids:group?.rows.map(g=>g.id)||[],originalValues:[...vals.value]};quantity.value='霍尔电压';unit.value='mV';}
 const labels={n:'测量次数',mean:'平均值',s:'实验标准偏差',uA:'A类标准不确定度',uB:'B类标准不确定度',uC:'合成标准不确定度',U:'扩展不确定度'};
 const inputs=computed(()=>({vals:vals.value,delta:delta.value,dist:dist.value,k:kf.value,quantity:quantity.value,unit:unit.value,instrument:instrument.value,source:source.value}));

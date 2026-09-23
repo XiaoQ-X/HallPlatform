@@ -40,7 +40,17 @@
           </div>
         </div>
       </header>
-      <main class="p-4 lg:p-6 flex-1"><InsecureContextNotice/><router-view /></main>
+      <main class="p-4 lg:p-6 flex-1">
+        <InsecureContextNotice/>
+        <router-view v-slot="{ Component }">
+          <Suspense>
+            <component :is="Component" />
+            <template #fallback>
+              <div class="card min-h-48 flex items-center justify-center text-sm text-ink-400">正在加载页面…</div>
+            </template>
+          </Suspense>
+        </router-view>
+      </main>
     </div>
     <ProfileModal v-if="showProfile" :user="auth.user" @close="showProfile=false"/>
   </div>

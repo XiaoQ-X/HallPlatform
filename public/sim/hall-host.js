@@ -1,7 +1,7 @@
 (function () {
   'use strict';
   let instance, ready = false;
-  const allowed = new Set(['InitExperiment','SetParameter','GotoStep','ResetExperiment','FinishFromWeb','RequestSnapshot','RecordMeasurement','ConnectTerminals']);
+  const allowed = new Set(['InitExperiment','SetParameter','GotoStep','ResetExperiment','FinishFromWeb','RequestSnapshot','RecordMeasurement','ConnectTerminals','UndoLastCable']);
   const journal = [];
   let storageError = null;
   let previousSession = null;
@@ -32,6 +32,14 @@
   }
   window.addEventListener('hall-event', ({detail:event}) => {
     if(event.type==='OnReady'){ready=true;announce();}
+    // A directly opened /sim/index.html has no Vue parent to consume the
+    // Unity exit event. Return to the platform shell instead of leaving the
+    // button apparently inert; iframe usage still delegates to SimLab below.
+    if(event.type==='OnExitRequested' && parent===window){
+      try { localStorage.setItem('hall.lastSession',JSON.stringify({schemaVersion:1,events:journal.concat(event)})); } catch {}
+      window.location.assign('/');
+      return;
+    }
     if(parent!==window){ try{ parent.postMessage({source:'hall-unity',event},location.origin); }catch(e){} }
     if(event.isDemo)return;
     if(event.type==='OnSnapshot')return;

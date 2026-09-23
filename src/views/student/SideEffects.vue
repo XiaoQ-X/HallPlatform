@@ -7,19 +7,25 @@
         <h2 class="text-lg font-bold text-ink-900">实验目标 · 副效应与误差修正</h2>
       </div>
       <p class="text-sm text-ink-600 leading-7">
-        认识霍尔电压测量中的 <b>不等位电势 V<sub>0</sub></b> 与 <b>厄廷豪森效应 V<sub>E</sub></b>，
-        调节电流、磁场、电极偏移与厄廷豪森参数，观察它们如何改变读数，再通过正反向（四方向对称）测量进行误差修正，分离出理想霍尔电压。
+        认识霍尔电压测量中的四种横向磁效应：<b>霍尔效应 V<sub>H</sub></b>、<b>厄廷豪森效应 V<sub>E</sub></b>、
+        <b>能斯特效应 V<sub>N</sub></b> 与 <b>里纪–勒杜克效应 V<sub>RL</sub></b>，并区分电极偏移造成的
+        <b>不等位电势 V<sub>0</sub></b>。四方向对称测量可消除 <b>V<sub>0</sub>、V<sub>N</sub>、V<sub>RL</sub></b>，
+        得到 V<sub>H</sub> + V<sub>E</sub>；只有独立确定 V<sub>E</sub> 并将其扣除，才能进一步得到理想霍尔电压。
       </p>
       <div class="mt-3 rounded-2xl bg-brand-50/60 px-4 py-3">
-        <Formula display expr="V_{measured}=V_H+V_0+V_E" />
+        <Formula display expr="V_{\perp}=V_H+V_E+V_N+V_{RL}" />
+        <Formula display expr="V_{\mathrm{measured}}=V_{\perp}+V_0+V_{\mathrm{offset}}" />
+        <p class="text-xs text-ink-500 leading-6 text-center">四项横向磁效应分别建模；V₀ 是接触偏移项，Voffset 是仪器零点项（默认 0）。</p>
       </div>
       <div class="mt-3 flex flex-wrap items-center gap-3">
         <router-link to="/sim/lab?case=side-effects" class="btn-primary">
-          <Icon name="flask" :size="16" /> 进入 Unity 仿真工作台
+          <Icon name="flask" :size="16" /> 进入四方向测量交互实验
         </router-link>
-        <span class="text-xs text-ink-400">在三维工作台中操作，实验事件与结果会自动保存</span>
+        <span class="text-xs text-ink-400">在交互工作台中完成测量，实验事件与结果会自动保存</span>
       </div>
     </section>
+
+    <AlgorithmFlow class="mb-6" />
 
     <!-- 参数输入 + 实时结果 -->
     <div class="grid lg:grid-cols-2 gap-6 mb-6">
@@ -138,21 +144,21 @@
       <section class="card p-6">
         <h2 class="font-bold text-ink-900 mb-3">误差修正结果</h2>
         <div class="rounded-2xl bg-brand-50/60 px-4 py-3 mb-4">
-          <Formula display expr="V_H=\frac{V_1-V_2+V_3-V_4}{4}" />
+          <Formula display expr="V_{\mathrm{corr}}=\frac{V_1-V_2+V_3-V_4}{4}=V_H+V_E" />
         </div>
         <template v-if="correction && !correction.error">
           <div class="grid grid-cols-3 gap-2 text-center">
             <div class="rounded-2xl bg-rose-50 py-3">
               <div class="text-[11px] text-ink-400">修正值 (VH+VE)</div>
-              <b class="text-rose-600 text-sm">{{ fmtMv(correction.correctedHall) }}</b>
+              <b class="text-rose-600 text-sm">{{ fmtMv(correction.correctedHall) }} mV</b>
             </div>
             <div class="rounded-2xl bg-amber-50 py-3">
               <div class="text-[11px] text-ink-400">残留 VE</div>
-              <b class="text-amber-500 text-sm">{{ fmtMv(correction.residual.value) }}</b>
+              <b class="text-amber-500 text-sm">{{ fmtMv(correction.residual.value) }} mV</b>
             </div>
             <div class="rounded-2xl bg-brand-50 py-3">
               <div class="text-[11px] text-ink-400">理想 VH</div>
-              <b class="text-brand-700 text-sm">{{ fmtMv(correction.idealVH) }}</b>
+              <b class="text-brand-700 text-sm">{{ fmtMv(correction.idealVH) }} mV</b>
             </div>
           </div>
           <div class="mt-4">
@@ -168,6 +174,7 @@
             </ol>
           </details>
         </template>
+        <p v-else-if="!correction" role="status" class="text-ink-500 text-sm">请先完成四个方向的实际记录，再查看修正结果。</p>
         <p v-else role="alert" class="text-rose-600 text-sm">参数无效，暂无法修正，请检查上方输入。</p>
       </section>
     </div>
@@ -192,8 +199,8 @@
         </div>
         <div class="card p-4">
           <h3 class="text-sm font-semibold text-ink-800 mb-2">修正前后结果对比</h3>
-          <Chart v-if="!correction.error" :option="chartCompare" height="250px" />
-          <div v-else class="h-[250px] flex items-center justify-center text-sm text-ink-400">参数无效</div>
+          <Chart v-if="correction && !correction.error" :option="chartCompare" height="250px" />
+          <div v-else class="h-[250px] flex items-center justify-center text-sm text-ink-400">完成四方向记录后显示对比</div>
         </div>
       </div>
     </section>
@@ -206,21 +213,22 @@
       </ol>
       <div class="rounded-2xl bg-sky-50 text-sky-700 text-sm px-4 py-3 mt-4 flex items-start gap-2">
         <Icon name="spark" :size="18" class="mt-0.5" />
-        <span>注意：VE 与 VH 的换向规律相同（都正比于 I·B），四方向对称法无法消除 VE；只有已知厄廷豪森系数或温差时，才能减去 VE 得到理想 VH。</span>
+        <span>注意：四种横向效应中，VH 与 VE 均正比于 I·B，四方向对称法保留二者；VN、VRL 均随 B 换向，会与 V0 及固定零点一起抵消。需通过独立标定确定 VE（例如有效系数 kE），再用 VH = Vcorr − VE 分离。</span>
       </div>
     </section>
 
     <!-- 实验记录提交 -->
     <section class="card p-6 mb-6">
       <h2 class="font-bold text-ink-900 mb-3">实验记录提交</h2>
-      <label class="text-xs text-ink-500 block mb-3">实验结论（请用自己的话总结 V0、VE 的来源与修正方法）
-        <textarea v-model="conclusion" rows="3" class="input mt-1" placeholder="例如：V0 来自电极偏移，与电流同向、与磁场无关，可由四方向对称法消除；VE 来自温差，与 VH 换向规律相同而残留，需已知 kE 才能减去。"></textarea>
+      <label class="text-xs text-ink-500 block mb-3">实验结论（请用自己的话总结四种效应、V0 与修正方法）
+        <textarea v-model="conclusion" rows="3" class="input mt-1" placeholder="例如：VH、VE、VN、VRL 是四种横向磁效应；V0 随电流换向，VN/VRL 随磁场换向，四方向组合抵消后三者，仅保留 VH+VE，再由 kE 扣除 VE。"></textarea>
       </label>
       <div class="flex flex-wrap items-center gap-3">
-        <button class="btn-primary" :disabled="saveState==='loading'||!!errorMsg" @click="submit">
+        <button class="btn-primary" :disabled="saveState==='loading'||!!errorMsg||!submitReady" @click="submit">
           <Icon v-if="saveState==='loading'" name="refresh" :size="16" class="animate-spin" />
           {{ saveState==='loading' ? '提交中…' : '提交实验记录' }}
         </button>
+        <span v-if="submitHint && saveState!=='error'" class="text-xs text-ink-500" role="status">{{ submitHint }}</span>
         <span v-if="saveState==='success'" class="status-pill on-emerald">
           <Icon name="check" :size="15" /> {{ saveMsg }}
         </span>
@@ -252,7 +260,7 @@
             </div>
           </div>
           <div class="rounded-xl bg-ink-50 p-3 text-[12px] text-ink-600 leading-6 break-words">
-            参数：I {{ h.params?.I_mA }} mA · B {{ h.params?.B_T }} T · r0 {{ h.params?.r0 }} Ω · kE {{ h.params?.kE }} · RH {{ h.params?.RH }} · d {{ h.params?.d_mm }} mm
+            参数：I {{ h.params?.I_mA }} mA · B {{ h.params?.B_T }} T · r0 {{ h.params?.r0 }} Ω · kE {{ h.params?.kE }} · kN {{ h.params?.kN_mV_T ?? 0 }} mV/T · kRL {{ h.params?.kRL_mV_T ?? 0 }} mV/T · RH {{ h.params?.RH }} · d {{ h.params?.d_mm }} mm
           </div>
         </div>
       </div>
@@ -261,32 +269,37 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, watch, onMounted } from 'vue';
 import Icon from '../../components/Icon.vue';
 import Chart from '../../components/Chart.vue';
 import Formula from '../../components/Formula.vue';
+import AlgorithmFlow from '../../components/AlgorithmFlow.vue';
 import { api } from '../../api';
 import { sideEffects, correctByReversal } from '../../../shared/calculations.cjs';
 import { useAuth } from '../../stores/auth';
 
 const auth = useAuth();
 // 参数集中在 reactive 对象，便于滑块/数字/动态 v-model
-const p = reactive({ I_mA: 5, B_T: 0.4, r0: 0.05, kE: 0.005, RH: -2.7e-4, d_mm: 0.5 });
+const p = reactive({ I_mA: 5, B_T: 0.4, r0: 0.05, kE: 0.005, kN_mV_T: 0.021, kRL_mV_T: 0.008, RH: -2.7e-4, d_mm: 0.5 });
 const curDir = ref(1), fldDir = ref(1);
 
 const paramRows = [
   { key: 'I_mA', label: '工作电流 I', min: 0, max: 10, step: 0.1, unit: 'mA' },
   { key: 'B_T', label: '磁感应强度 B', min: 0, max: 1, step: 0.02, unit: 'T' },
   { key: 'r0', label: '电极偏移（不等位电阻 r0）', min: 0, max: 0.5, step: 0.005, unit: 'Ω' },
-  { key: 'kE', label: '厄廷豪森系数 kE', min: 0, max: 0.02, step: 0.0005, unit: 'mV/(mA·T)' }
+  { key: 'kE', label: '厄廷豪森附加电压的有效系数 kE', min: 0, max: 0.02, step: 0.0005, unit: 'mV/(mA·T)' },
+  { key: 'kN_mV_T', label: '能斯特有效系数 kN', min: -0.1, max: 0.1, step: 0.001, unit: 'mV/T' },
+  { key: 'kRL_mV_T', label: '里纪–勒杜克有效系数 kRL', min: -0.1, max: 0.1, step: 0.001, unit: 'mV/T' }
 ];
 // 输入范围校验（与滑块 min/max 对齐），用于空值/非数字/越界的显式提示
 const inputChecks = [
   ['I_mA','工作电流 I',0,10],['B_T','磁感应强度 B',0,1],
-  ['r0','不等位电阻 r0',0,0.5],['kE','厄廷豪森系数 kE',0,0.02]
+  ['r0','不等位电阻 r0',0,0.5],['kE','厄廷豪森附加电压的有效系数 kE',0,0.02],
+  ['kN_mV_T','能斯特有效系数 kN',-0.1,0.1],['kRL_mV_T','里纪–勒杜克有效系数 kRL',-0.1,0.1]
 ];
 
-const baseInput = () => ({ I: p.I_mA / 1000, B: p.B_T, RH: p.RH, d: p.d_mm / 1000, r0: p.r0, ettinghausenCoeff: p.kE });
+const baseInput = () => ({ I: p.I_mA / 1000, B: p.B_T, RH: p.RH, d: p.d_mm / 1000, r0: p.r0, ettinghausenCoeff: p.kE,
+  nernstCoeff: p.kN_mV_T / 1000, righiLeducCoeff: p.kRL_mV_T / 1000 });
 
 const current = computed(() => {
   try { return sideEffects({ ...baseInput(), polarity: { current: curDir.value, field: fldDir.value } }); }
@@ -313,6 +326,8 @@ const items = computed(() => {
     { label: '理想霍尔电压 VH', v: c.VH, color: '#0d9488' },
     { label: '不等位电势 V0', v: c.V0, color: '#f59e0b' },
     { label: '厄廷豪森电压 VE', v: c.VE, color: '#e11d48' },
+    { label: '能斯特电压 VN', v: c.VN, color: '#7c3aed' },
+    { label: '里纪–勒杜克 VRL', v: c.VRL, color: '#db2777' },
     { label: '实际测量 Vmeasured', v: c.Vmeasured, color: '#0284c7' }
   ];
   const max = Math.max(...data.map(d => Math.abs(d.v)), 1e-12);
@@ -341,9 +356,28 @@ function autoMeasure() {
 }
 function clearRecords() { for (const s of slots) recorded[s.key] = null; }
 
-// 修正（物理模式，可分离 VE）
+// 参数改变后，已有的四方向读数不再代表当前实验条件；必须重新测量，
+// 防止把旧读数与新参数一起提交。方向切换本身不清空记录。
+watch(() => [p.I_mA, p.B_T, p.r0, p.kE, p.kN_mV_T, p.kRL_mV_T, p.RH, p.d_mm], clearRecords);
+
+// 修正只使用当前已记录的四个方向。
+// 四方向组合先得到 Vcorr = VH + VE；当前有效 kE 仅用于估算并扣除 VE，
+// 因而“理想 VH”仍明确依赖有效系数，而不是从四个电压单独推导出来。
 const correction = computed(() => {
-  try { return correctByReversal(baseInput()); }
+  if (filledCount.value < slots.length) return null;
+  try {
+    const measured = correctByReversal({ readings: { ...recorded } });
+    const veRef = sideEffects({ ...baseInput(), polarity: { current: 1, field: 1 } }).VE;
+    return {
+      ...measured,
+      residual: { ...measured.residual, value: veRef, separated: true,
+        note: '四方向记录保留 VE；使用当前有效 kE 估算 VE 后分离理想 VH' },
+      idealVH: measured.correctedHall - veRef,
+      steps: [...measured.steps.slice(0, 5),
+        '当前四方向记录完整；依据有效系数 kE 估算 VE(+I,+B)='+fmtMv(veRef)+' mV',
+        '分离结果：理想 VH = Vcorr − VE = '+fmtMv(measured.correctedHall - veRef)+' mV']
+    };
+  }
   catch (e) { return { error: e.message }; }
 });
 
@@ -358,22 +392,22 @@ const yMv = { type: 'value', name: 'mV', nameTextStyle: { fontSize: 10 }, axisLa
 const chartVH = computed(() => {
   const I = p.I_mA / 1000;
   const ideal = sweepB(B => p.RH * I * B / (p.d_mm / 1000));
-  const meas = sweepB(B => p.RH * I * B / (p.d_mm / 1000) + p.r0 * I + p.kE * I * B);
+  const meas = sweepB(B => p.RH * I * B / (p.d_mm / 1000) + p.r0 * I + p.kE * I * B + (p.kN_mV_T+p.kRL_mV_T)*B/1000);
   return { grid: gridCommon, tooltip: { trigger: 'axis' }, legend: { top: 2, textStyle: { fontSize: 10 } }, xAxis: xB, yAxis: yMv,
     series: [line('理想 VH', '#0d9488', toMv(ideal)), line('实测读数', '#0284c7', toMv(meas))] };
 });
 const chartV0 = computed(() => {
   const I = p.I_mA / 1000;
-  const no = sweepB(B => p.RH * I * B / (p.d_mm / 1000) + p.kE * I * B);
-  const yes = sweepB(B => p.RH * I * B / (p.d_mm / 1000) + p.kE * I * B + p.r0 * I);
+  const no = sweepB(B => p.RH * I * B / (p.d_mm / 1000) + p.kE * I * B + (p.kN_mV_T+p.kRL_mV_T)*B/1000);
+  const yes = sweepB(B => p.RH * I * B / (p.d_mm / 1000) + p.kE * I * B + (p.kN_mV_T+p.kRL_mV_T)*B/1000 + p.r0 * I);
   return { grid: gridCommon, tooltip: { trigger: 'axis' }, legend: { top: 2, textStyle: { fontSize: 10 } }, xAxis: xB, yAxis: yMv,
     series: [line('无 V0', '#94a3b8', toMv(no)), line('含 V0', '#f59e0b', toMv(yes))] };
 });
 const chartVE = computed(() => {
   const I = p.I_mA / 1000;
   const ve = sweepB(B => p.kE * I * B);
-  const no = sweepB(B => p.RH * I * B / (p.d_mm / 1000) + p.r0 * I);
-  const yes = sweepB(B => p.RH * I * B / (p.d_mm / 1000) + p.r0 * I + p.kE * I * B);
+  const no = sweepB(B => p.RH * I * B / (p.d_mm / 1000) + p.r0 * I + (p.kN_mV_T+p.kRL_mV_T)*B/1000);
+  const yes = sweepB(B => p.RH * I * B / (p.d_mm / 1000) + p.r0 * I + p.kE * I * B + (p.kN_mV_T+p.kRL_mV_T)*B/1000);
   const veSeries = line('VE 分量', '#e11d48', toMv(ve)); veSeries.yAxisIndex = 1;
   const yVE = { type:'value', name:'VE mV', nameTextStyle:{fontSize:10,color:'#e11d48'}, axisLabel:{fontSize:9,color:'#e11d48'}, splitLine:{show:false} };
   return { grid: { ...gridCommon, right: 50 }, tooltip: { trigger: 'axis' }, legend: { top: 2, textStyle: { fontSize: 10 } }, xAxis: xB, yAxis: [yMv, yVE],
@@ -397,19 +431,33 @@ const saveState = ref('idle'), saveMsg = ref('');
 const conclusion = ref('');
 const history = ref([]);
 const expandedHist = ref(null);
+// 提交必须来自完整的四方向测量，并包含可复核的实验结论，避免把默认/空读数误记为实验结果。
+const submitHint = computed(() => {
+  if (errorMsg.value) return '';
+  if (filledCount.value < slots.length) return `请完成四方向测量（还缺 ${slots.length - filledCount.value} 个方向）`;
+  if (conclusion.value.trim().length < 10) return '请填写至少 10 个字的实验结论，说明四种效应、V0 与修正方法';
+  return '';
+});
+const submitReady = computed(() => !submitHint.value && !errorMsg.value);
 const toggleHist = id => expandedHist.value = expandedHist.value === id ? null : id;
 // 历史读数 readings 以 V(volt) 存储，展示换算 mV
 const histMv = (h,k) => Number.isFinite(h.readings?.[k]) ? (h.readings[k]*1000).toFixed(3) : '—';
 async function loadHistory() { try { history.value = await api('/sim/side-effects'); } catch { history.value = []; } }
 async function submit() {
-  if (current.value.error || correction.value.error) return;
+  if (current.value.error || !correction.value || correction.value.error || !submitReady.value) {
+    if (!current.value.error && correction.value && !correction.value.error) {
+      saveState.value = 'error';
+      saveMsg.value = submitHint.value || '请先完成实验记录';
+    }
+    return;
+  }
   saveState.value = 'loading'; saveMsg.value = '';
   try {
     const c = correction.value;
     const body = {
       title: '副效应与误差修正 · ' + new Date().toLocaleString('zh-CN'),
       conclusion: conclusion.value,
-      params: { I_mA: p.I_mA, B_T: p.B_T, RH: p.RH, d_mm: p.d_mm, r0: p.r0, kE: p.kE },
+      params: { I_mA: p.I_mA, B_T: p.B_T, RH: p.RH, d_mm: p.d_mm, r0: p.r0, kE: p.kE, kN_mV_T: p.kN_mV_T, kRL_mV_T: p.kRL_mV_T },
       readings: { ...recorded },
       result: {
         V1_mV: +(c.readings[0].Vmeasured * 1000).toFixed(4),
@@ -429,8 +477,9 @@ const guide = [
   '观察理想 VH：保持 I，缓慢改变 B，VH 应过原点、随 B 线性变化。',
   '引入电极偏移（r0）：读数整体平移，V0 = r0·I，与 B 无关，随电流换向变号。',
   '引入厄廷豪森效应（kE）：VE = kE·I·B，随 B 增大，使曲线斜率改变。',
+  '观察能斯特与里纪–勒杜克效应：VN = kN·B，VRL = kRL·B，均随磁场换向变号。',
   '逐方向记录 V1~V4，或使用“四方向对称测量”一键完成。',
-  '执行误差修正：对称法消除 V0，但 VE 与 VH 换向规律相同而残留；已知 kE 时减去 VE 得到理想 VH。'
+  '执行误差修正：对称法消除 V0、VN、VRL，但 VE 与 VH 换向规律相同而残留；已知 kE 时减去 VE 得到理想 VH。'
 ];
 
 onMounted(() => { auth.fetchMe(); loadHistory(); });

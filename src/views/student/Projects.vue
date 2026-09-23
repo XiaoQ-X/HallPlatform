@@ -96,7 +96,13 @@ async function open(p){ current.value = await api('/resources/projects/'+p.id);
   files.value = current.value.mine?current.value.mine.files||[]:[];history.value=current.value.mine?await api('/resources/submissions/'+current.value.mine.id+'/versions'):[]; }
 async function saveProgress(){await api('/resources/projects/'+current.value.id+'/progress',{method:'PUT',body:{progress:current.value.tasks.map(t=>!!t.done)}});}
 async function onFile(e){ const f=e.target.files[0];if(!f)return;
-  uploading.value=true;try{const r = await upload(f, p=>upProg.value=p); files.value.push(r);}finally{upProg.value=0;uploading.value=false;} }
+  const projectId = current.value?.id;
+  uploading.value=true;try{
+    const r = await upload(f, p=>upProg.value=p);
+    // 上传期间用户可能已经返回列表或打开了另一个课题，不能把附件挂到新课题。
+    if (current.value?.id !== projectId) return;
+    files.value.push(r);
+  }finally{upProg.value=0;uploading.value=false;} }
 async function submit(){
   if(saving.value||uploading.value)return;saving.value=true;try{await saveProgress();await api('/resources/projects/'+current.value.id+'/submit',
     {method:'POST',body:{content:content.value,files:files.value}});

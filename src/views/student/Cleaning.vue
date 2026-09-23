@@ -198,8 +198,15 @@ function downloadCleaned() {
   downloadBlob('hall-cleaned.csv', to7(rows));
 }
 const causes = ['接线错误（线序/松动）','带电操作违反规程','电流设置不当','读数未稳定即记录','组内条件不一致','环境/设备干扰','系统误报','其他（在措施中说明）'];
-async function pick(s){ sel.value=s; const d=await api('/workshop/session-points/'+s.id);
-  points.value=d.abnormals; groupList.value=d.groups; }
+let pickSeq=0;
+async function pick(s){
+  const seq=++pickSeq, selected=s;
+  sel.value=selected; points.value=[]; groupList.value=[];
+  const d=await api('/workshop/session-points/'+selected.id);
+  // 切换会话后，旧请求的结果不能覆盖当前会话。
+  if(seq!==pickSeq||sel.value?.id!==selected.id)return;
+  points.value=d.abnormals; groupList.value=d.groups;
+}
 function openForm(a){form.value={session_id:sel.value.id,abnormal_code:a.code,point_label:a.detail||a.code,cause:causes[0],action:'',resolved:false,label:'会话#'+sel.value.id,decision:'keep'};}
 function openManual(g){form.value={session_id:sel.value.id,measurement_id:g.id,decision:g.decision||'keep',abnormal_code:'MANUAL_SUSPECT',point_label:g.group_id,cause:causes[7],action:'',resolved:false,label:'会话#'+sel.value.id};}
 function editRecord(r){form.value={...r,resolved:!!r.resolved};}

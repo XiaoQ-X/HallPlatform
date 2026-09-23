@@ -5,6 +5,7 @@ const fs = require('fs');
 if(process.env.HALL_DEMO==='1')require('./seed');
 const db = require('./db');
 require('./content-migration')(db);
+require('./formula-migration')(db);
 require('./integrity-migration')(db);
 require('./legacy-review-migration')(db);
 require('./workflow-migration')(db);
@@ -20,6 +21,15 @@ app.use((req,res,next)=>{res.setHeader('X-Content-Type-Options','nosniff');res.s
 // 静态资源
 const distDir = path.join(__dirname, '..', 'dist');
 app.use('/sim', express.static(path.join(__dirname, '..', 'public', 'sim')));
+// 下载路径必须在 SPA 回退之前明确返回 404。否则一个不存在的安装包会
+// 被 index.html 兜底成 200，浏览器会把网页误当成 .exe 下载。
+// In production installers live outside the release tree so an application
+// release cannot accidentally overwrite or expose them. The directory can be
+// overridden for local development; the route still returns a real 404 when
+// the package is absent instead of falling through to the SPA.
+const downloadDir = process.env.HALL_DOWNLOAD_DIR || path.join(__dirname, '..', 'public', 'downloads');
+app.use('/downloads', express.static(downloadDir));
+app.use('/downloads', (req,res)=>res.status(404).json({error:'安装包暂未提供'}));
 app.use('/uploads', (req,res)=>res.status(410).json({error:'旧附件请通过教师确认后重新上传'}));
 
 // 认证中间件
@@ -64,7 +74,8 @@ app.use('/api/me', auth, (req,res)=>{
   const u=db.prepare('SELECT id,username,name,role,class_id,student_no,avatar FROM users WHERE id=?').get(req.user.id);
   let className=null;
   if(u.class_id){ className=db.prepare('SELECT name FROM classes WHERE id=?').get(u.class_id)?.name; }
-  res.json({...u, class_name:className});
+  const presentation=require('./presentation-identity');
+  res.json(presentation.visibleProfile(db,{...u, class_name:className}));
 });
 
 app.use('/api',(req,res)=>res.status(404).json({error:'接口不存在'}));

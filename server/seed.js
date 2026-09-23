@@ -8,20 +8,22 @@ function seed() {
   const ins = (sql, p) => db.prepare(sql).run(...p);
 
   // 班级
-  const cls = ins('INSERT INTO classes(name,code) VALUES(?,?)', ['物理2301班','PHY2301']);
+  // Public/demo fixtures deliberately use aliases. Login usernames remain
+  // stable for local acceptance, while no real student identity is seeded.
+  const cls = ins('INSERT INTO classes(name,code) VALUES(?,?)', ['班级1','CLASS1']);
   const classId = cls.lastInsertRowid;
 
   // 教师
   ins('INSERT INTO users(username,password,name,role,avatar) VALUES(?,?,?,?,?)',
-    ['teacher', hash, '王雅琴', 'teacher', '👩‍🏫']);
+    ['teacher', hash, '教师1', 'teacher', '👩‍🏫']);
   // 学生
   const students = [
-    ['student','张晓明','🧑‍🎓'], ['li','李思远','👨‍🎓'], ['han','韩雨桐','👩‍🎓'],
-    ['wang','王梓轩','🧑'], ['zhao','赵灵均','👩'], ['chen','陈博文','👨']
+    ['student','同学1','🧑‍🎓'], ['li','同学2','👨‍🎓'], ['han','同学3','👩‍🎓'],
+    ['wang','同学4','🧑'], ['zhao','同学5','👩'], ['chen','同学6','👨']
   ];
   students.forEach(([u,n,a],i)=>{
     ins('INSERT INTO users(username,password,name,role,class_id,student_no,avatar) VALUES(?,?,?,?,?,?,?)',
-      [u, hash, n, 'student', classId, '23010'+(i+1), a]);
+      [u, hash, n, 'student', classId, String(i + 1), a]);
   });
 
   // ========== 应用案例库 ==========
@@ -44,20 +46,20 @@ function seed() {
       null],
     ['从实验室到国际标准——量子霍尔效应','1985年诺贝尔物理学奖与电阻自然基准',
       '🏅','#EC4899','前沿物理','挑战','量子化,冯·克利青,电阻基准',
-      '<h3>科学里程碑</h3><p>1980年冯·克利青发现，强磁场、极低温下二维电子气的霍尔电阻呈量子化平台：$R_H=\\dfrac{h}{\\nu e^2}$，精度可达10⁻¹⁰。</p><h3>意义</h3><p>该电阻只依赖基本物理常数，1990年起被用作国际电阻基准，使“欧姆”不再依赖实物标准器。</p><h3>衔接</h3><p>本平台研究的经典霍尔效应 $R_H=\\dfrac{V_H d}{I_S B}$，正是理解量子霍尔效应的起点。</p>',
+      '<h3>科学里程碑</h3><p>1980年冯·克利青发现，强磁场、极低温下二维电子气的霍尔电阻呈量子化平台：$R_{xy}=\\dfrac{h}{\\nu e^2}$，精度可达10⁻¹⁰。</p><h3>意义</h3><p>该电阻只依赖基本物理常数，1990年起被用作国际电阻基准，使“欧姆”不再依赖实物标准器。</p><h3>衔接</h3><p>本平台研究的经典霍尔效应 $R_H=\\dfrac{V_H d}{I_S B}$，正是理解量子霍尔效应的起点。</p>',
       null]
   ];
   const caseCfg = [
     { material:'n-silicon', thickness_mm:0.5, maxIs_mA:10, maxIm_A:1, taskTitle:'开关特性观察', xAxis:'IM_A',
       taskGoal:'缓慢增大励磁电流 IM（模拟磁体靠近），观察霍尔电压由小到大、最终达到“开”阈值的过程，记录发生阶跃时的磁场。' },
-    { material:'n-silicon', thickness_mm:0.5, maxIs_mA:10, maxIm_A:5, taskTitle:'电流传感器标定', xAxis:'IM_A',
-      taskGoal:'固定工作电流 IS，将励磁 IM 从 0 扫到 5A（模拟被测大电流），拟合 VH-IM 直线，其斜率即电流传感器的标定系数。' },
+    { material:'n-silicon', thickness_mm:0.5, maxIs_mA:10, maxIm_A:1, taskTitle:'电流传感器标定', xAxis:'IM_A',
+      taskGoal:'固定工作电流 IS，在 0–1 A 范围扫描励磁 IM；在磁芯未饱和区近似拟合 VH-IM，并检查接近饱和时的曲线偏离。' },
     { material:'n-silicon', thickness_mm:0.5, maxIs_mA:10, maxIm_A:1, taskTitle:'换相方波时序', xAxis:'IM_A',
       taskGoal:'通过四方向换向（模拟转子磁钢转过），观察霍尔输出在正负磁场间切换的方波时序，理解控制器如何据此换相。' },
-    { material:'n-silicon', thickness_mm:1.0, maxIs_mA:20, maxIm_A:3, taskTitle:'励磁-流速验证', xAxis:'IM_A',
-      taskGoal:'改变励磁电流（对应不同流速下的感应信号），验证感应电动势与磁场（流速）的线性关系 E∝B·v。' },
+    { material:'n-silicon', thickness_mm:1.0, maxIs_mA:20, maxIm_A:3, taskTitle:'运动电动势资料对比', xAxis:'IM_A',
+      taskGoal:'资料拓展：电磁流量计满足 E=B·D·v；本平台仅扫描仿真磁场等效量 IM，在流速 v 与电极间距 D 固定时观察 E 对 B 的正比关系，不把改变磁场误认为改变流速。' },
     { material:'gaas-2deg', thickness_mm:0.1, maxIs_mA:5, maxIm_A:2, taskTitle:'强磁场霍尔测量', xAxis:'IM_A',
-      taskGoal:'在强磁场设定下测量霍尔电阻，理解 $R_H=\\frac{h}{\\nu e^2}$ 量子平台的物理图像，并与经典 $R_H=\\frac{V_H d}{I_S B}$ 对比。' }
+      taskGoal:'在强磁场设定下学习量子霍尔电阻平台 $R_{xy}=\\frac{h}{\\nu e^2}=\\frac{R_K}{\\nu}$（其中 $R_K=\\frac{h}{e^2}$），并与经典霍尔系数 $R_H=\\frac{V_H d}{I_S B}$ 对比。' }
   ];
   cases.forEach((c,i)=>{ c[8]=JSON.stringify(caseCfg[i]); });
   cases.forEach((c,i)=>ins('INSERT INTO cases(title,subtitle,cover,color,category,difficulty,tags,content,sim_config,sort) VALUES(?,?,?,?,?,?,?,?,?,?)',
@@ -108,7 +110,7 @@ function seed() {
     ['读数为零','电压超量程','未开机','需要换向'],'B','2','仪器');
   Q('single','霍尔元件能“非接触”测量电流，主要利用了：',
     ['电流的热效应','电流产生的磁场与霍尔效应','静电感应','压电效应'],'B','2','应用');
-  Q('single','量子霍尔效应中霍尔电阻平台 R_K = h/(νe²)，其显著特点是：',
+  Q('single','量子霍尔效应中第 ν 个平台的霍尔电阻为 R_xy = h/(νe²) = R_K/ν（R_K=h/e²），其显著特点是：',
     ['随材料变化','只依赖基本物理常数','随温度变化','与磁场无关'],'B','2','前沿');
   Q('multiple','下列属于霍尔效应副效应的有：',
     ['不等位电势差','爱廷豪森效应','能斯特效应','里纪-勒杜克效应'],'ABCD','3','副效应');
@@ -155,13 +157,13 @@ function seed() {
         {t:'画出报警电路原理图并说明工作逻辑',r:true},
         {t:'（可选）搭建实物并录制演示视频',r:false}]),
       JSON.stringify([{n:'任务单.pdf'},{n:'AH3144数据手册.pdf'}])],
-    ['霍尔电压定量关系探究','系统探究 V_H 与 I_S、I_M 的线性规律',
+    ['霍尔电压定量关系探究','探究 V_H 与 I_S、I_M 的关系及线性近似适用范围',
       '📈','#10B981','数据探究',
-      '<p>固定励磁电流扫描工作电流，再固定工作电流扫描励磁电流，用数据工坊完成线性拟合。</p>',
+      '<p>固定励磁电流扫描工作电流，再固定工作电流扫描励磁电流；在未饱和工作区进行线性拟合，并观察磁芯接近饱和时的偏离。</p>',
       JSON.stringify([
         {t:'完成 VH-IS 扫描（至少6个设定点，每点四方向测量）',r:true},
         {t:'完成 VH-IM 扫描（至少6个设定点）',r:true},
-        {t:'在数据工坊拟合两条直线，报告斜率与R²',r:true},
+        {t:'在数据工坊拟合模型，报告斜率、R²，并说明 VH-IM 线性近似的适用范围',r:true},
         {t:'由斜率讨论霍尔灵敏度的物理意义',r:true}]),
       null],
     ['霍尔系数法测载流子浓度','综合运用 R_H、σ 求 n 与迁移率 μ',
@@ -240,7 +242,7 @@ function seed() {
     [1,'class',classId,'本周实验任务','请在周五前完成霍尔效应仿真实验并提交VH-IS数据。','project',2]);
   studentIds.forEach(s=>{
     ins('INSERT INTO notifications(student_id,title,content,link) VALUES(?,?,?,?)',
-      [s.id,'新实验任务','王老师发布了本周霍尔效应实验任务。','/sim/lab']);
+      [s.id,'新实验任务','教师1发布了本周霍尔效应实验任务。','/sim/lab']);
   });
 
   db.exec('UPDATE users SET must_change=1');

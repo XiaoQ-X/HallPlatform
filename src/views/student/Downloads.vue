@@ -1,8 +1,8 @@
 <template>
   <div class="max-w-5xl">
     <div class="mb-6">
-      <h1 class="text-2xl font-bold text-ink-900">软件下载中心</h1>
-      <p class="text-sm text-ink-400 mt-1">配套桌面软件，供离线环境使用；在线功能以本平台为准。</p>
+      <h1 class="text-2xl font-bold text-ink-900">离线工具（可选）</h1>
+      <p class="text-sm text-ink-400 mt-1">平台的实验、计算、数据处理和提交功能均可直接在线完成，无需另装软件；以下工具仅供离线场景选用。</p>
     </div>
 
     <div class="grid md:grid-cols-2 gap-5">
@@ -20,9 +20,12 @@
         <ul class="text-xs text-ink-500 mt-3 space-y-1.5 flex-1">
           <li v-for="p in s.points" :key="p" class="flex gap-2"><Icon name="check" :size="14" class="text-brand-600 mt-0.5"/>{{ p }}</li>
         </ul>
-        <a :href="'/downloads/' + s.file" :download="s.file" class="btn-primary mt-5">
-          <Icon name="download" :size="16"/> 下载安装程序
+        <a v-if="available[s.file]" :href="'/downloads/' + s.file" :download="s.file" class="btn-primary mt-5">
+          <Icon name="download" :size="16"/> 可选：下载安装程序
         </a>
+        <button v-else type="button" disabled class="btn-soft mt-5 w-full cursor-not-allowed opacity-70" title="当前部署没有安装包，在线功能已覆盖">
+          <Icon name="check" :size="16"/> 在线功能已覆盖，暂无安装包
+        </button>
       </div>
     </div>
 
@@ -38,7 +41,9 @@
 </template>
 
 <script setup>
+import { onMounted, reactive } from 'vue';
 import Icon from '../../components/Icon.vue';
+const available = reactive({});
 const softwares = [
   {
     name: '霍尔效应数据工作台', ver: '1.1.0', size: '45.3 MB', os: 'Windows 10/11',
@@ -53,4 +58,10 @@ const softwares = [
     points: ['含自由相机与阶段引导', '无需联网即可运行']
   }
 ];
+onMounted(async()=>{
+  await Promise.all(softwares.map(async s=>{
+    try { const r=await fetch('/downloads/'+s.file,{method:'HEAD',cache:'no-store'}); available[s.file]=r.ok; }
+    catch { available[s.file]=false; }
+  }));
+});
 </script>

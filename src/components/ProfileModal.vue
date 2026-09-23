@@ -16,8 +16,9 @@
         </div>
       </div>
 
-      <label class="text-xs text-ink-400">姓名</label>
-      <input v-model="form.name" class="input mb-4"/>
+      <label for="profile-name" class="text-xs text-ink-400">{{ user?.identity_anonymized ? '匿名名称' : '姓名' }}</label>
+      <input id="profile-name" v-model="form.name" :readonly="!!user?.identity_anonymized" :aria-describedby="user?.identity_anonymized ? 'profile-identity-note' : undefined" class="input" :class="user?.identity_anonymized ? 'bg-ink-50' : 'mb-4'"/>
+      <p v-if="user?.identity_anonymized" id="profile-identity-note" class="text-xs text-ink-500 leading-6 mt-2 mb-4">名称中的编号是系统分配的演示匿名标识，不可修改。原登录账号和密码保持有效。</p>
 
       <div class="rounded-2xl bg-ink-50 p-4">
         <div class="text-xs font-medium text-ink-500 mb-3">修改密码（不修改可留空）</div>
@@ -48,7 +49,8 @@ watch(()=>props.user, u => { if(u){ form.name=u.name||''; form.avatar=u.avatar||
 async function save(){
   error.value='';
   try {
-    const body = { name:form.name, avatar:form.avatar };
+    const body = { avatar:form.avatar };
+    if (!props.user?.identity_anonymized) body.name = form.name;
     if(newPassword.value){ body.oldPassword=oldPassword.value; body.newPassword=newPassword.value; }
     const r = await api('/auth/me', { method:'PUT', body });
     if(r.token){setToken(r.token);auth.token=r.token;}

@@ -22,9 +22,21 @@ test('只有 VE（RH=0，系数路径）',()=>{
   const r=sideEffects({I:0.005,B:0.4,RH:0,d:5e-4,ettinghausenCoeff:0.005});
   assert.equal(r.VH,0);assert.equal(r.V0,0);approx(r.VE,1e-5);approx(r.Vmeasured,1e-5);
 });
+test('四种横向效应包含 VN 与 VRL，且四方向组合抵消两项',()=>{
+  const p={...base,ettinghausenCoeff:0.005,nernstCoeff:0.000021,righiLeducCoeff:0.000008};
+  const a=sideEffects(p),b=sideEffects({...p,polarity:{current:1,field:-1}});
+  assert.ok(Math.abs(a.VN-0.0000084)<1e-15);assert.ok(Math.abs(a.VRL-0.0000032)<1e-15);
+  assert.equal(b.VN,-a.VN);assert.equal(b.VRL,-a.VRL);
+  const c=correctByReversal(p);assert.ok(Math.abs(c.correctedHall-(a.VH+a.VE))<1e-12);
+  assert.ok(c.eliminated.some(x=>x.startsWith('VN')));assert.ok(c.eliminated.some(x=>x.startsWith('VRL')));
+});
 test('温度梯度路径 VE = S·∇T·L_E',()=>{
   const r=sideEffects({...base,temperatureGradient:100,seebeckCoeff:2e-4,ettinghausenLength:0.004});
   assert.equal(r.VH,0.04);approx(r.VE,8e-5);
+});
+test('温度梯度路径保留热电参数符号',()=>{
+  const r=sideEffects({...base,temperatureGradient:-100,seebeckCoeff:2e-4,ettinghausenLength:0.004});
+  approx(r.VE,-8e-5);
 });
 test('磁场换向：VH、VE 变号，V0 不变',()=>{
   const p={...base,V0:0.002,ettinghausenCoeff:0.005};

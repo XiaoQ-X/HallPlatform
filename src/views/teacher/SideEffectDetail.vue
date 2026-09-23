@@ -97,7 +97,7 @@
             <div v-for="m in s.measurements" :key="m.id" class="rounded-xl bg-ink-50 py-2">
               <div class="text-[10px] text-ink-400">槽位{{ m.slot }}（{{ m.is_dir>0?'+':'−' }}，{{ m.im_dir>0?'+':'−' }}）</div>
               <b class="text-[12px] text-sky-700">{{ f(m.raw_mV) }}</b>
-              <div class="text-[9px] text-ink-400">V0 {{ f(m.payload.V0_mV) }} · VE {{ f(m.payload.VE_mV) }}</div>
+              <div class="text-[9px] text-ink-400">V0 {{ f(m.payload?.V0_mV) }} · VE {{ f(m.payload?.VE_mV) }} · VN {{ f(m.payload?.VN_mV) }} · VRL {{ f(m.payload?.VRL_mV) }}</div>
             </div>
           </div>
 
@@ -112,7 +112,7 @@
             <details class="text-xs">
               <summary class="cursor-pointer text-brand-700">查看参数快照与关键操作</summary>
               <div class="rounded-xl bg-ink-50 p-3 mt-2 text-ink-600 leading-6">
-                <div>参数：IS {{ s.state.report.params?.IS_mA }} mA · IM {{ s.state.report.params?.IM_A }} A · B {{ s.state.report.params?.B_T }} T · r0 {{ s.state.report.params?.r0 }} Ω · kE {{ s.state.report.params?.kE }}</div>
+                <div>参数：IS {{ s.state.report.params?.IS_mA }} mA · IM {{ s.state.report.params?.IM_A }} A · B {{ s.state.report.params?.B_T }} T · r0 {{ s.state.report.params?.r0 }} Ω · kE {{ s.state.report.params?.kE }} · kN {{ s.state.report.params?.kN_mV_T ?? 0 }} mV/T · kRL {{ s.state.report.params?.kRL_mV_T ?? 0 }} mV/T</div>
                 <ul class="list-disc pl-4 mt-1">
                   <li v-for="(o,j) in s.state.report.operations" :key="j">{{ o.time }} · {{ o.text }}</li>
                 </ul>
@@ -139,6 +139,12 @@
     </div>
   </div>
   <!-- 加载骨架 -->
+  <div v-else-if="loadError" class="max-w-5xl card p-10 text-center">
+    <div class="text-4xl mb-3">⚠️</div>
+    <div class="font-bold text-ink-800 mb-2">学生实验记录加载失败</div>
+    <p class="text-sm text-rose-600 mb-5">{{ loadError }}</p>
+    <button class="btn-primary" @click="load">重新加载</button>
+  </div>
   <div v-else class="max-w-5xl space-y-5 animate-pulse">
     <div class="h-14 rounded-3xl bg-white/70"></div>
     <div class="h-72 rounded-3xl bg-white/70"></div>
@@ -155,6 +161,7 @@ import { api } from '../../api';
 
 const route = useRoute();
 const data = ref(null);
+const loadError = ref('');
 const STATUS = {
   not_started: { label: '未开始', cls: 'bg-ink-100 text-ink-500' },
   in_progress: { label: '进行中', cls: 'bg-sky-100 text-sky-700' },
@@ -187,8 +194,9 @@ function prefillFromLatest(){
   form.comment=g.comment||'';
 }
 async function load(){
-  data.value = await api('/teacher/side-effects/student/'+route.params.studentId);
-  prefillFromLatest();
+  loadError.value='';
+  try { data.value = await api('/teacher/side-effects/student/'+route.params.studentId); prefillFromLatest(); }
+  catch(e){ data.value=null; loadError.value=e.message||'学生实验记录加载失败'; }
 }
 async function submitGrade(){
   const scores={};let all=true;

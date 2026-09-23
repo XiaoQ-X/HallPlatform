@@ -8,8 +8,24 @@ try{
     const login=await fetch(base+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:role,password})});const token=(await login.json()).token;
     const context=await browser.newContext({viewport:{width:1440,height:1000}});await context.addInitScript(t=>localStorage.setItem('hall_token',t),token);
     const page=await context.newPage();page.on('pageerror',e=>result.errors.push(e.message));
-    const routes=role==='teacher'?['/teacher','/teacher/resources','/teacher/students','/teacher/pushes','/teacher/review','/teacher/rubrics','/teacher/grades','/teacher/appeals']:['/','/resources/cases','/resources/ideology','/resources/projects','/resources/quiz','/workshop/cleaning','/workshop/analysis','/workshop/uncertainty','/peer/works','/peer/appeals','/grades'];
+    const routes=role==='teacher'?['/teacher','/teacher/resources','/teacher/students','/teacher/pushes','/teacher/review','/teacher/rubrics','/teacher/grades','/teacher/appeals']:['/','/resources/cases','/resources/ideology','/resources/projects','/resources/quiz','/workshop/cleaning','/workshop/analysis','/workshop/uncertainty','/peer/works','/peer/appeals','/grades','/sim/side-effects'];
     for(const route of routes){await page.goto(base+route);await page.waitForTimeout(350);result.routes.push({role,route,text:(await page.locator('body').innerText()).slice(0,120),overflow:await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)});}
+    if(role==='student'){
+      await page.goto(base+'/sim/side-effects');
+      await page.getByText('四种横向磁效应',{exact:false}).first().waitFor({state:'visible',timeout:5000});
+      assert((await page.locator('body').innerText()).includes('四项横向磁效应分别建模'),'副效应页必须显示四项横向效应公式');
+      await page.getByRole('button',{name:'− I',exact:true}).click();
+      await page.getByRole('button',{name:'− B',exact:true}).click();
+      await page.getByRole('button',{name:'四方向对称测量',exact:true}).click();
+      assert((await page.locator('body').innerText()).includes('4 / 4'),'四方向按钮应一次填满四个槽位');
+      assert((await page.locator('body').innerText()).includes('能斯特电压 VN'),'页面应展示 VN 分项');
+      await page.getByRole('button',{name:'清空',exact:true}).click();
+      assert((await page.locator('body').innerText()).includes('0 / 4'),'清空按钮应恢复空测量组');
+      await page.goto(base+'/resources/downloads');
+      await page.getByText('无需另装软件',{exact:false}).waitFor({state:'visible',timeout:5000});
+      assert((await page.locator('body').innerText()).includes('无需另装软件'),'在线平台应明确无需另装软件');
+      assert((await page.locator('body').innerText()).includes('离线工具（可选）'),'导航/页面应将桌面工具标为可选');
+    }
     if(role==='teacher'){
       await page.goto(base+'/teacher/resources');await page.getByRole('button',{name:'课题包',exact:true}).click();await page.getByRole('button',{name:'新建',exact:true}).click();const modal=page.locator('.modal');await modal.locator('input').first().fill('浏览器验收课题');await modal.locator('textarea').nth(0).fill('实验指南');await modal.locator('textarea').nth(1).fill('记录完整四方向数据');await modal.getByRole('button',{name:'保存',exact:true}).click();await modal.waitFor({state:'hidden'});result.projectSave=true;
     }else{
@@ -47,6 +63,8 @@ try{
       result.unity.recordEvents=await frame.evaluate(()=>window.HallHost.events.slice(-5));
       result.unity.platformText=(await page.locator('body').innerText()).slice(-1000);
       assert(result.unity.platformText.includes('完整组 1'),'Duplicate bridge delivery must not duplicate groups');
+      assert(result.unity.platformText.includes('IM 0.400 A'),'Unity 数据栏应将励磁电流格式化为 3 位小数');
+      assert(!result.unity.platformText.includes('0.400000005'),'Unity 数据栏不得泄漏浮点噪声');
       assert(!result.unity.platformText.includes('保存失败'),'Final events must be acknowledged');
     }
     await context.close();
